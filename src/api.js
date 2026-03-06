@@ -3,7 +3,6 @@ import axios from 'axios';
 const API = axios.create({ baseURL: 'http://127.0.0.1:8000/api' });
 const SEARCH_API = axios.create({ baseURL: 'http://127.0.0.1:8001' });
 
-// Attach token to every request automatically
 API.interceptors.request.use((req) => {
   const token = localStorage.getItem('token');
   if (token) req.headers.Authorization = `Bearer ${token}`;
