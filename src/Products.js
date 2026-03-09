@@ -32,8 +32,11 @@ export default function Products({ darkMode }) {
   const clearFilters = () => { setSelectedCategory('All'); setMinPrice(''); setMaxPrice(''); setCurrentPage(1); };
 
   const exportCSV = () => {
-    const headers = ['SKU', 'Name', 'Category', 'Price', 'Stock', 'URL'];
-    const rows = filtered.map(p => [p.sku, `"${p.name}"`, p.category_name, p.price, p.stock, p.source_url]);
+    const headers = ['SKU', 'Name', 'Category', 'Price', 'Availability', 'URL'];
+    const rows = filtered.map(p => [
+      p.sku, `"${p.name}"`, p.category_name, p.price,
+      p.stock === 1 ? 'Available' : 'Out of Stock', p.source_url
+    ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -83,7 +86,9 @@ export default function Products({ darkMode }) {
               <p style={s.sku}>SKU: {p.sku}</p>
               <div style={s.footer}>
                 <span style={s.price}>₹{p.price}</span>
-                <span style={s.stock}>Stock: {p.stock}</span>
+                <span style={p.stock === 1 ? s.inStock : s.outStock}>
+                  {p.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
+                </span>
               </div>
             </div>
           </div>
@@ -118,7 +123,7 @@ export default function Products({ darkMode }) {
             <div style={s.modalContent}>
               <div style={s.modalLeft}>
                 {selectedProduct.image_url
-                  ? <img src={selectedProduct.image_url} alt={selectedProduct.name} style={s.modalImage} onError={e => e.target.style.display='none'} />
+                  ? <img src={selectedProduct.image_url} alt={selectedProduct.name} style={s.modalImage} onError={e => e.target.style.display = 'none'} />
                   : <div style={s.modalImagePlaceholder}>🖼️ No Image</div>
                 }
               </div>
@@ -126,10 +131,13 @@ export default function Products({ darkMode }) {
                 <span style={s.badge}>{selectedProduct.category_name}</span>
                 <h2 style={s.modalName}>{selectedProduct.name}</h2>
                 <p style={s.modalSku}>SKU: {selectedProduct.sku}</p>
+                {selectedProduct.retailer_name && (
+                  <p style={s.retailerTag}>🏪 {selectedProduct.retailer_name}</p>
+                )}
                 <div style={s.modalPriceRow}>
                   <span style={s.modalPrice}>₹{selectedProduct.price}</span>
-                  <span style={selectedProduct.stock > 0 ? s.inStock : s.outStock}>
-                    {selectedProduct.stock > 0 ? `✅ In Stock (${selectedProduct.stock})` : '❌ Out of Stock'}
+                  <span style={selectedProduct.stock === 1 ? s.inStock : s.outStock}>
+                    {selectedProduct.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
                   </span>
                 </div>
                 {selectedProduct.description && (
@@ -141,7 +149,7 @@ export default function Products({ darkMode }) {
                 {selectedProduct.source_url && (
                   <button style={s.viewBtn}
                     onClick={() => window.open(selectedProduct.source_url, '_blank')}>
-                    🔗 View on Westside →
+                    🔗 View Product →
                   </button>
                 )}
               </div>
@@ -164,7 +172,7 @@ const getStyles = (dark) => ({
   clearBtn: { padding: '10px 16px', background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
   count: { color: dark ? '#aaa' : '#888', fontSize: '13px', marginBottom: '20px' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' },
-  card: { background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' },
+  card: { background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer' },
   image: { width: '100%', height: '200px', objectFit: 'cover' },
   imagePlaceholder: { width: '100%', height: '200px', background: dark ? '#2a2a2a' : '#f0f2f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' },
   cardBody: { padding: '12px' },
@@ -173,11 +181,11 @@ const getStyles = (dark) => ({
   sku: { color: '#999', fontSize: '12px', margin: '0 0 12px' },
   footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${dark ? '#333' : '#f0f0f0'}`, paddingTop: '12px' },
   price: { color: '#52c41a', fontWeight: 'bold', fontSize: '18px' },
-  stock: { color: '#888', fontSize: '13px' },
+  inStock: { color: '#52c41a', fontSize: '13px', fontWeight: '500' },
+  outStock: { color: '#ff4d4f', fontSize: '13px', fontWeight: '500' },
   pagination: { display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '32px', flexWrap: 'wrap' },
   pageBtn: { padding: '8px 14px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333', cursor: 'pointer', fontSize: '14px' },
   activePage: { background: '#1890ff', color: 'white', border: '1px solid #1890ff' },
-  // Modal
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   modal: { background: dark ? '#1f1f1f' : 'white', borderRadius: '16px', width: '800px', maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto', position: 'relative', padding: '32px' },
   closeBtn: { position: 'absolute', top: '16px', right: '16px', background: dark ? '#333' : '#f0f0f0', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', color: dark ? '#fff' : '#333' },
@@ -187,11 +195,10 @@ const getStyles = (dark) => ({
   modalImagePlaceholder: { width: '100%', height: '280px', background: dark ? '#2a2a2a' : '#f0f2f5', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', color: '#999', fontSize: '16px' },
   modalRight: { flex: 1, minWidth: '200px' },
   modalName: { color: dark ? '#fff' : '#333', margin: '12px 0 8px', fontSize: '22px' },
-  modalSku: { color: '#999', fontSize: '13px', marginBottom: '16px' },
+  modalSku: { color: '#999', fontSize: '13px', marginBottom: '8px' },
+  retailerTag: { color: '#1890ff', fontSize: '13px', marginBottom: '16px' },
   modalPriceRow: { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' },
   modalPrice: { color: '#52c41a', fontWeight: 'bold', fontSize: '28px' },
-  inStock: { color: '#52c41a', fontSize: '14px' },
-  outStock: { color: '#ff4d4f', fontSize: '14px' },
   descBox: { background: dark ? '#2a2a2a' : '#f9f9f9', padding: '16px', borderRadius: '8px', marginBottom: '20px' },
   descTitle: { color: dark ? '#fff' : '#333', margin: '0 0 8px' },
   descText: { color: dark ? '#aaa' : '#666', fontSize: '14px', lineHeight: '1.6', margin: 0 },
