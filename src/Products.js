@@ -7,17 +7,18 @@ export default function Products({ darkMode }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedBrand, setSelectedBrand] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [sortBy, setSortBy] = useState('default');
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [activeImage, setActiveImage] = useState('');
   const [compareList, setCompareList] = useState([]);
   const [showCompare, setShowCompare] = useState(false);
 
   const retailerParam = new URLSearchParams(window.location.search).get('retailer') || 'All';
   const [selectedRetailer] = useState(retailerParam);
-
   const s = getStyles(darkMode);
 
   useEffect(() => {
@@ -25,15 +26,20 @@ export default function Products({ darkMode }) {
     getCategories().then(res => setCategories(res.data));
   }, []);
 
+  // Get unique brands
+  const brands = ['All', ...new Set(products.map(p => p.brand).filter(Boolean).sort())];
+
   const filtered = products
     .filter(p => selectedRetailer === 'All' || p.retailer_name === selectedRetailer)
     .filter(p => selectedCategory === 'All' || p.category_name === selectedCategory)
+    .filter(p => selectedBrand === 'All' || p.brand === selectedBrand)
     .filter(p => !minPrice || parseFloat(p.price) >= parseFloat(minPrice))
     .filter(p => !maxPrice || parseFloat(p.price) <= parseFloat(maxPrice))
     .sort((a, b) => {
       if (sortBy === 'price_asc') return parseFloat(a.price) - parseFloat(b.price);
       if (sortBy === 'price_desc') return parseFloat(b.price) - parseFloat(a.price);
       if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
+      if (sortBy === 'newest') return new Date(b.created_at) - new Date(a.created_at);
       return 0;
     });
 
@@ -41,11 +47,17 @@ export default function Products({ darkMode }) {
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleCategory = (cat) => { setSelectedCategory(cat); setCurrentPage(1); };
-  const handleMinPrice = (val) => { setMinPrice(val); setCurrentPage(1); };
-  const handleMaxPrice = (val) => { setMaxPrice(val); setCurrentPage(1); };
-  const clearFilters = () => { setSelectedCategory('All'); setMinPrice(''); setMaxPrice(''); setSortBy('default'); setCurrentPage(1); };
+  const handleBrand = (brand) => { setSelectedBrand(brand); setCurrentPage(1); };
+  const clearFilters = () => {
+    setSelectedCategory('All'); setSelectedBrand('All');
+    setMinPrice(''); setMaxPrice(''); setSortBy('default'); setCurrentPage(1);
+  };
 
-  // Compare logic
+  const openModal = (p) => {
+    setSelectedProduct(p);
+    setActiveImage(p.image_url);
+  };
+
   const toggleCompare = (e, p) => {
     e.stopPropagation();
     setCompareList(prev => {
@@ -56,10 +68,11 @@ export default function Products({ darkMode }) {
   };
 
   const exportCSV = () => {
-    const headers = ['SKU', 'Name', 'Category', 'Retailer', 'Price', 'Availability', 'URL'];
+    const headers = ['SKU', 'Name', 'Brand', 'Category', 'Retailer', 'Price', 'Availability', 'Colors', 'Sizes', 'URL'];
     const rows = filtered.map(p => [
-      p.sku, `"${p.name}"`, p.category_name, p.retailer_name, p.price,
-      p.stock === 1 ? 'Available' : 'Out of Stock', p.source_url
+      p.sku, `"${p.name}"`, p.brand, p.category_name, p.retailer_name, p.price,
+      p.stock === 1 ? 'Available' : 'Out of Stock',
+      `"${p.colors}"`, `"${p.sizes}"`, p.source_url
     ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -68,6 +81,17 @@ export default function Products({ darkMode }) {
     a.href = url;
     a.download = `products_${selectedRetailer}_${selectedCategory}.csv`;
     a.click();
+  };
+
+  // Get additional images for modal
+  const getGalleryImages = (p) => {
+    if (!p) return [];
+    const imgs = [p.image_url].filter(Boolean);
+    if (p.additional_images) {
+      const extra = p.additional_images.split(',').filter(Boolean);
+      extra.forEach(img => { if (!imgs.includes(img)) imgs.push(img); });
+    }
+    return imgs.slice(0, 6);
   };
 
   return (
@@ -91,21 +115,26 @@ export default function Products({ darkMode }) {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters Row 1 */}
       <div style={s.filterRow}>
         <select style={s.select} value={selectedCategory} onChange={e => handleCategory(e.target.value)}>
           <option value="All">All Categories</option>
           {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
+        <select style={s.select} value={selectedBrand} onChange={e => handleBrand(e.target.value)}>
+          <option value="All">All Brands</option>
+          {brands.filter(b => b !== 'All').map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
         <input style={s.priceInput} type="number" placeholder="Min Price ₹"
-          value={minPrice} onChange={e => handleMinPrice(e.target.value)} />
+          value={minPrice} onChange={e => { setMinPrice(e.target.value); setCurrentPage(1); }} />
         <input style={s.priceInput} type="number" placeholder="Max Price ₹"
-          value={maxPrice} onChange={e => handleMaxPrice(e.target.value)} />
+          value={maxPrice} onChange={e => { setMaxPrice(e.target.value); setCurrentPage(1); }} />
         <select style={s.sortSelect} value={sortBy} onChange={e => { setSortBy(e.target.value); setCurrentPage(1); }}>
           <option value="default">Sort: Default</option>
           <option value="price_asc">Price: Low → High</option>
           <option value="price_desc">Price: High → Low</option>
           <option value="name_asc">Name: A → Z</option>
+          <option value="newest">Newest First</option>
         </select>
         <button style={s.clearBtn} onClick={clearFilters}>✕ Clear</button>
       </div>
@@ -121,7 +150,7 @@ export default function Products({ darkMode }) {
           const isCompared = compareList.find(x => x.id === p.id);
           return (
             <div key={p.id} style={{ ...s.card, ...(isCompared ? s.cardSelected : {}) }}
-              onClick={() => setSelectedProduct(p)}>
+              onClick={() => openModal(p)}>
               {p.image_url
                 ? <img src={p.image_url} alt={p.name} style={s.image} onError={e => e.target.style.display = 'none'} />
                 : <div style={s.imagePlaceholder}>🖼️ No Image</div>
@@ -130,14 +159,17 @@ export default function Products({ darkMode }) {
                 <span style={s.badge}>{p.category_name}</span>
                 <h3 style={s.name}>{p.name}</h3>
                 <p style={s.sku}>SKU: {p.sku}</p>
+                {p.brand && <p style={s.brandTag}>🏷️ {p.brand}</p>}
+                {p.colors && (
+                  <p style={s.colorTag}>🎨 {p.colors.split(',').slice(0, 3).join(', ')}</p>
+                )}
                 <div style={s.footer}>
                   <span style={s.price}>₹{p.price}</span>
                   <span style={p.stock === 1 ? s.inStock : s.outStock}>
                     {p.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
                   </span>
                 </div>
-                <button
-                  style={isCompared ? s.compareBtnActive : s.compareBtnSmall}
+                <button style={isCompared ? s.compareBtnActive : s.compareBtnSmall}
                   onClick={e => toggleCompare(e, p)}>
                   {isCompared ? '✓ Added to Compare' : '+ Compare'}
                 </button>
@@ -167,17 +199,27 @@ export default function Products({ darkMode }) {
         <button style={s.pageBtn} onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>»</button>
       </div>
 
-      {/* Product Detail Modal */}
+      {/* Product Detail Modal with Image Gallery */}
       {selectedProduct && (
         <div style={s.overlay} onClick={() => setSelectedProduct(null)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <button style={s.closeBtn} onClick={() => setSelectedProduct(null)}>✕</button>
             <div style={s.modalContent}>
               <div style={s.modalLeft}>
-                {selectedProduct.image_url
-                  ? <img src={selectedProduct.image_url} alt={selectedProduct.name} style={s.modalImage} onError={e => e.target.style.display = 'none'} />
-                  : <div style={s.modalImagePlaceholder}>🖼️ No Image</div>
-                }
+                {/* Main Image */}
+                <img src={activeImage || selectedProduct.image_url} alt={selectedProduct.name}
+                  style={s.modalImage} onError={e => e.target.style.display = 'none'} />
+                {/* Thumbnail Gallery */}
+                {getGalleryImages(selectedProduct).length > 1 && (
+                  <div style={s.thumbnails}>
+                    {getGalleryImages(selectedProduct).map((img, i) => (
+                      <img key={i} src={img} alt={`view-${i}`}
+                        style={{ ...s.thumb, ...(activeImage === img ? s.thumbActive : {}) }}
+                        onClick={() => setActiveImage(img)}
+                        onError={e => e.target.style.display = 'none'} />
+                    ))}
+                  </div>
+                )}
               </div>
               <div style={s.modalRight}>
                 <span style={s.badge}>{selectedProduct.category_name}</span>
@@ -186,20 +228,51 @@ export default function Products({ darkMode }) {
                 {selectedProduct.retailer_name && (
                   <p style={s.retailerTag}>🏪 {selectedProduct.retailer_name}</p>
                 )}
+                {selectedProduct.brand && (
+                  <p style={s.brandTag}>🏷️ Brand: <strong>{selectedProduct.brand}</strong></p>
+                )}
                 <div style={s.modalPriceRow}>
                   <span style={s.modalPrice}>₹{selectedProduct.price}</span>
                   <span style={selectedProduct.stock === 1 ? s.inStock : s.outStock}>
                     {selectedProduct.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
                   </span>
                 </div>
+
+                {/* Colors */}
+                {selectedProduct.colors && (
+                  <div style={s.infoBox}>
+                    <h4 style={s.infoTitle}>🎨 Colors</h4>
+                    <div style={s.tagRow}>
+                      {selectedProduct.colors.split(',').filter(Boolean).map((c, i) => (
+                        <span key={i} style={s.tag}>{c.trim()}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sizes */}
+                {selectedProduct.sizes && (
+                  <div style={s.infoBox}>
+                    <h4 style={s.infoTitle}>📏 Sizes</h4>
+                    <div style={s.tagRow}>
+                      {selectedProduct.sizes.split(',').filter(Boolean).map((sz, i) => (
+                        <span key={i} style={s.sizeTag}>{sz.trim()}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Description */}
                 {selectedProduct.description && (
                   <div style={s.descBox}>
-                    <h4 style={s.descTitle}>Description</h4>
+                    <h4 style={s.descTitle}>📝 Description</h4>
                     <p style={s.descText}>{selectedProduct.description.slice(0, 300)}...</p>
                   </div>
                 )}
+
                 {selectedProduct.source_url && (
-                  <button style={s.viewBtn} onClick={() => window.open(selectedProduct.source_url, '_blank')}>
+                  <button style={s.viewBtn}
+                    onClick={() => window.open(selectedProduct.source_url, '_blank')}>
                     🔗 View Product →
                   </button>
                 )}
@@ -226,9 +299,12 @@ export default function Products({ darkMode }) {
                   <table style={s.compareTable}>
                     <tbody>
                       <tr><td style={s.compareLabel}>SKU</td><td style={s.compareVal}>{p.sku}</td></tr>
+                      <tr><td style={s.compareLabel}>Brand</td><td style={s.compareVal}>{p.brand || '—'}</td></tr>
                       <tr><td style={s.compareLabel}>Category</td><td style={s.compareVal}>{p.category_name}</td></tr>
                       <tr><td style={s.compareLabel}>Retailer</td><td style={s.compareVal}>{p.retailer_name}</td></tr>
                       <tr><td style={s.compareLabel}>Price</td><td style={{ ...s.compareVal, color: '#52c41a', fontWeight: 'bold' }}>₹{p.price}</td></tr>
+                      <tr><td style={s.compareLabel}>Colors</td><td style={s.compareVal}>{p.colors || '—'}</td></tr>
+                      <tr><td style={s.compareLabel}>Sizes</td><td style={s.compareVal}>{p.sizes || '—'}</td></tr>
                       <tr><td style={s.compareLabel}>Status</td>
                         <td style={p.stock === 1 ? s.inStock : s.outStock}>
                           {p.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
@@ -259,10 +335,10 @@ const getStyles = (dark) => ({
   retailerFilter: { color: '#1890ff', fontSize: '14px', margin: '4px 0 0' },
   exportBtn: { padding: '10px 16px', background: '#52c41a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
   compareBtn: { padding: '10px 16px', background: '#722ed1', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
-  filterRow: { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' },
-  select: { padding: '10px 16px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', cursor: 'pointer', minWidth: '180px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
-  sortSelect: { padding: '10px 16px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', cursor: 'pointer', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
-  priceInput: { padding: '10px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', width: '120px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
+  filterRow: { display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' },
+  select: { padding: '10px 12px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '13px', cursor: 'pointer', minWidth: '160px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
+  sortSelect: { padding: '10px 12px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '13px', cursor: 'pointer', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
+  priceInput: { padding: '10px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '13px', width: '110px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
   clearBtn: { padding: '10px 16px', background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
   count: { color: dark ? '#aaa' : '#888', fontSize: '13px', marginBottom: '20px' },
   compareHint: { color: '#722ed1', fontWeight: '500' },
@@ -274,8 +350,10 @@ const getStyles = (dark) => ({
   cardBody: { padding: '12px' },
   badge: { display: 'inline-block', background: '#e6f7ff', color: '#1890ff', padding: '2px 10px', borderRadius: '20px', fontSize: '12px' },
   name: { margin: '8px 0 4px', color: dark ? '#fff' : '#333', fontSize: '15px' },
-  sku: { color: '#999', fontSize: '12px', margin: '0 0 12px' },
-  footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${dark ? '#333' : '#f0f0f0'}`, paddingTop: '12px', marginBottom: '10px' },
+  sku: { color: '#999', fontSize: '12px', margin: '0 0 4px' },
+  brandTag: { color: dark ? '#ddd' : '#555', fontSize: '12px', margin: '0 0 4px' },
+  colorTag: { color: dark ? '#aaa' : '#888', fontSize: '12px', margin: '0 0 8px' },
+  footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${dark ? '#333' : '#f0f0f0'}`, paddingTop: '10px', marginBottom: '10px' },
   price: { color: '#52c41a', fontWeight: 'bold', fontSize: '18px' },
   inStock: { color: '#52c41a', fontSize: '13px', fontWeight: '500' },
   outStock: { color: '#ff4d4f', fontSize: '13px', fontWeight: '500' },
@@ -285,25 +363,32 @@ const getStyles = (dark) => ({
   pageBtn: { padding: '8px 14px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333', cursor: 'pointer', fontSize: '14px' },
   activePage: { background: '#1890ff', color: 'white', border: '1px solid #1890ff' },
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modal: { background: dark ? '#1f1f1f' : 'white', borderRadius: '16px', width: '800px', maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto', position: 'relative', padding: '32px' },
+  modal: { background: dark ? '#1f1f1f' : 'white', borderRadius: '16px', width: '860px', maxWidth: '95vw', maxHeight: '90vh', overflow: 'auto', position: 'relative', padding: '32px' },
   closeBtn: { position: 'absolute', top: '16px', right: '16px', background: dark ? '#333' : '#f0f0f0', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', color: dark ? '#fff' : '#333' },
   modalContent: { display: 'flex', gap: '32px', flexWrap: 'wrap' },
-  modalLeft: { flex: '0 0 280px' },
-  modalImage: { width: '100%', borderRadius: '12px', objectFit: 'cover' },
-  modalImagePlaceholder: { width: '100%', height: '280px', background: dark ? '#2a2a2a' : '#f0f2f5', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', color: '#999', fontSize: '16px' },
+  modalLeft: { flex: '0 0 300px' },
+  modalImage: { width: '100%', borderRadius: '12px', objectFit: 'cover', marginBottom: '12px' },
+  thumbnails: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+  thumb: { width: '56px', height: '56px', objectFit: 'cover', borderRadius: '8px', cursor: 'pointer', border: '2px solid transparent', opacity: 0.7 },
+  thumbActive: { border: '2px solid #1890ff', opacity: 1 },
   modalRight: { flex: 1, minWidth: '200px' },
   modalName: { color: dark ? '#fff' : '#333', margin: '12px 0 8px', fontSize: '22px' },
   modalSku: { color: '#999', fontSize: '13px', marginBottom: '8px' },
-  retailerTag: { color: '#1890ff', fontSize: '13px', marginBottom: '16px' },
-  modalPriceRow: { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' },
+  retailerTag: { color: '#1890ff', fontSize: '13px', marginBottom: '8px' },
+  modalPriceRow: { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' },
   modalPrice: { color: '#52c41a', fontWeight: 'bold', fontSize: '28px' },
-  descBox: { background: dark ? '#2a2a2a' : '#f9f9f9', padding: '16px', borderRadius: '8px', marginBottom: '20px' },
-  descTitle: { color: dark ? '#fff' : '#333', margin: '0 0 8px' },
-  descText: { color: dark ? '#aaa' : '#666', fontSize: '14px', lineHeight: '1.6', margin: 0 },
+  infoBox: { background: dark ? '#2a2a2a' : '#f9f9f9', padding: '12px', borderRadius: '8px', marginBottom: '12px' },
+  infoTitle: { color: dark ? '#fff' : '#333', margin: '0 0 8px', fontSize: '14px' },
+  tagRow: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
+  tag: { background: '#fff0f6', color: '#eb2f96', padding: '3px 10px', borderRadius: '20px', fontSize: '12px' },
+  sizeTag: { background: '#f0f5ff', color: '#2f54eb', padding: '3px 10px', borderRadius: '20px', fontSize: '12px' },
+  descBox: { background: dark ? '#2a2a2a' : '#f9f9f9', padding: '12px', borderRadius: '8px', marginBottom: '16px' },
+  descTitle: { color: dark ? '#fff' : '#333', margin: '0 0 8px', fontSize: '14px' },
+  descText: { color: dark ? '#aaa' : '#666', fontSize: '13px', lineHeight: '1.6', margin: 0 },
   viewBtn: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #1890ff, #096dd9)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', cursor: 'pointer', fontWeight: '500' },
   compareCard: { background: dark ? '#2a2a2a' : '#f9f9f9', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column' },
   compareImage: { width: '100%', height: '160px', objectFit: 'cover', borderRadius: '8px', marginBottom: '12px' },
   compareTable: { width: '100%', borderCollapse: 'collapse', marginTop: '12px' },
-  compareLabel: { color: dark ? '#aaa' : '#888', fontSize: '13px', padding: '6px 0', width: '40%' },
-  compareVal: { color: dark ? '#fff' : '#333', fontSize: '13px', padding: '6px 0' },
+  compareLabel: { color: dark ? '#aaa' : '#888', fontSize: '12px', padding: '5px 0', width: '40%' },
+  compareVal: { color: dark ? '#fff' : '#333', fontSize: '12px', padding: '5px 0' },
 });

@@ -19,12 +19,10 @@ export default function Dashboard({ darkMode }) {
 
   useEffect(() => { loadData(); }, []);
 
-  const totalAvailable = products.filter(p => p.stock === 1).length;
   const avgPrice = products.length
     ? (products.reduce((sum, p) => sum + parseFloat(p.price), 0) / products.length).toFixed(2)
     : 0;
 
-  // Retailer wise stats
   const retailerStats = retailers.map(r => {
     const rProducts = products.filter(p => p.retailer_name === r.name);
     const available = rProducts.filter(p => p.stock === 1).length;
@@ -33,6 +31,11 @@ export default function Dashboard({ darkMode }) {
       : 0;
     return { ...r, count: rProducts.length, available, avgPrice: avgP };
   });
+
+  // New Arrivals — last 10 products by created_at
+  const newArrivals = [...products]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 8);
 
   const handleUpload = async (e) => {
     const file = e.target.files[0];
@@ -72,22 +75,10 @@ export default function Dashboard({ darkMode }) {
 
       {/* Overall Stats */}
       <div style={s.statsGrid}>
-        <div style={s.stat}>
-          <h1 style={s.statNum}>{products.length}</h1>
-          <p style={s.statLabel}>Total Products</p>
-        </div>
-        <div style={s.stat}>
-          <h1 style={s.statNum}>{categories.length}</h1>
-          <p style={s.statLabel}>Categories</p>
-        </div>
-        <div style={s.stat}>
-          <h1 style={s.statNum}>{retailers.length}</h1>
-          <p style={s.statLabel}>Retailers</p>
-        </div>
-        <div style={s.stat}>
-          <h1 style={s.statNum}>₹{avgPrice}</h1>
-          <p style={s.statLabel}>Avg Price</p>
-        </div>
+        <div style={s.stat}><h1 style={s.statNum}>{products.length}</h1><p style={s.statLabel}>Total Products</p></div>
+        <div style={s.stat}><h1 style={s.statNum}>{categories.length}</h1><p style={s.statLabel}>Categories</p></div>
+        <div style={s.stat}><h1 style={s.statNum}>{retailers.length}</h1><p style={s.statLabel}>Retailers</p></div>
+        <div style={s.stat}><h1 style={s.statNum}>₹{avgPrice}</h1><p style={s.statLabel}>Avg Price</p></div>
       </div>
 
       {/* Retailer Wise Stats */}
@@ -124,12 +115,33 @@ export default function Dashboard({ darkMode }) {
         ))}
       </div>
 
-      {/* Recent Products */}
+      {/* New Arrivals */}
+      <h3 style={s.sectionTitle}>🆕 New Arrivals</h3>
+      <div style={s.newArrivalsGrid}>
+        {newArrivals.map(p => (
+          <div key={p.id} style={s.arrivalCard}
+            onClick={() => p.source_url && window.open(p.source_url, '_blank')}>
+            {p.image_url
+              ? <img src={p.image_url} alt={p.name} style={s.arrivalImage} onError={e => e.target.style.display = 'none'} />
+              : <div style={s.arrivalPlaceholder}>🖼️</div>
+            }
+            <div style={s.arrivalBody}>
+              <p style={s.arrivalName}>{p.name.slice(0, 40)}{p.name.length > 40 ? '...' : ''}</p>
+              <div style={s.arrivalFooter}>
+                <span style={s.arrivalPrice}>₹{p.price}</span>
+                <span style={s.arrivalRetailer}>{p.retailer_name}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent Products Table */}
       <h3 style={s.sectionTitle}>Recent Products</h3>
       <table style={s.table}>
         <thead>
           <tr style={s.th}>
-            <th>SKU</th><th>Name</th><th>Category</th><th>Retailer</th><th>Price</th><th>Status</th>
+            <th>SKU</th><th>Name</th><th>Brand</th><th>Category</th><th>Retailer</th><th>Price</th><th>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -139,7 +151,8 @@ export default function Dashboard({ darkMode }) {
               onMouseEnter={e => e.currentTarget.style.background = darkMode ? '#2a2a2a' : '#f5f5f5'}
               onMouseLeave={e => e.currentTarget.style.background = darkMode ? '#1f1f1f' : 'white'}>
               <td style={s.td}>{p.sku}</td>
-              <td style={s.td}>{p.name}</td>
+              <td style={s.td}>{p.name.slice(0, 40)}...</td>
+              <td style={s.td}>{p.brand || '—'}</td>
               <td style={s.td}>{p.category_name}</td>
               <td style={s.td}>{p.retailer_name}</td>
               <td style={s.td}>₹{p.price}</td>
@@ -178,6 +191,17 @@ const getStyles = (dark) => ({
   rStatNum: { fontSize: '20px', fontWeight: 'bold', color: dark ? '#fff' : '#333' },
   rStatLabel: { fontSize: '11px', color: dark ? '#aaa' : '#888' },
   viewProductsBtn: { width: '100%', marginTop: '16px', padding: '10px', background: 'linear-gradient(135deg, #1890ff, #096dd9)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' },
+  // New Arrivals
+  newArrivalsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '16px', marginBottom: '32px' },
+  arrivalCard: { background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer' },
+  arrivalImage: { width: '100%', height: '150px', objectFit: 'cover' },
+  arrivalPlaceholder: { width: '100%', height: '150px', background: dark ? '#2a2a2a' : '#f0f2f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' },
+  arrivalBody: { padding: '10px' },
+  arrivalName: { color: dark ? '#fff' : '#333', fontSize: '13px', margin: '0 0 8px', lineHeight: '1.4' },
+  arrivalFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  arrivalPrice: { color: '#52c41a', fontWeight: 'bold', fontSize: '14px' },
+  arrivalRetailer: { color: '#1890ff', fontSize: '11px' },
+  // Table
   table: { width: '100%', borderCollapse: 'collapse', background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer' },
   th: { background: '#1890ff', color: 'white', padding: '12px 16px', textAlign: 'left' },
   tr: { borderBottom: `1px solid ${dark ? '#333' : '#f0f0f0'}`, background: dark ? '#1f1f1f' : 'white' },
