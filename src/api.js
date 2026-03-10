@@ -1,16 +1,23 @@
 import axios from 'axios';
 
-const API = axios.create({ baseURL: 'http://127.0.0.1:8000/api' });
-const SEARCH_API = axios.create({ baseURL: 'http://127.0.0.1:8001' });
-
-API.interceptors.request.use((req) => {
-  const token = localStorage.getItem('token');
-  if (token) req.headers.Authorization = `Bearer ${token}`;
-  return req;
+export const djangoApi = axios.create({
+  baseURL: 'http://127.0.0.1:8000/api',
 });
 
-export const login = (data) => API.post('/token/', data);
-export const getProducts = () => API.get('/products/');
-export const getCategories = () => API.get('/categories/');
+export const fastapiApi = axios.create({
+  baseURL: 'http://127.0.0.1:8001',
+});
+
+// Add JWT token to every request
+djangoApi.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+export const login = (data) => djangoApi.post('/token/', data);
+export const getProducts = () => djangoApi.get('/products/');
+export const getCategories = () => djangoApi.get('/categories/');
+export const getRetailers = () => djangoApi.get('/retailers/');
 export const searchProducts = (q, min, max) =>
-  SEARCH_API.get(`/search?q=${q}${min ? `&min_price=${min}` : ''}${max ? `&max_price=${max}` : ''}`);
+  fastapiApi.get('/search', { params: { q, min_price: min || undefined, max_price: max || undefined } });

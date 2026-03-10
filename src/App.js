@@ -1,18 +1,26 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import Login from './Login';
 import Products from './Products';
 import Search from './Search';
 import Dashboard from './Dashboard';
+import Retailers from './Retailers';
 
 function Layout({ onLogout, darkMode, toggleDarkMode }) {
+  const navigate = useNavigate();
   const s = getStyles(darkMode);
+
+  const handleSelectRetailer = (retailerName) => {
+    navigate(`/products?retailer=${encodeURIComponent(retailerName)}`);
+  };
+
   return (
     <div style={s.layout}>
       <div style={s.sidebar}>
         <h2 style={s.logo}>🛒 ECommerce</h2>
         <nav style={{ flex: 1 }}>
           <Link to="/dashboard" style={s.link}>📊 Dashboard</Link>
+          <Link to="/retailers" style={s.link}>🏪 Retailers</Link>
           <Link to="/products" style={s.link}>📦 Products</Link>
           <Link to="/search" style={s.link}>🔍 Search</Link>
         </nav>
@@ -26,6 +34,7 @@ function Layout({ onLogout, darkMode, toggleDarkMode }) {
       <div style={s.main}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard darkMode={darkMode} />} />
+          <Route path="/retailers" element={<Retailers darkMode={darkMode} onSelectRetailer={handleSelectRetailer} />} />
           <Route path="/products" element={<Products darkMode={darkMode} />} />
           <Route path="/search" element={<Search darkMode={darkMode} />} />
           <Route path="*" element={<Dashboard darkMode={darkMode} />} />

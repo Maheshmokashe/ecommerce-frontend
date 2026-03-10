@@ -11,6 +11,11 @@ export default function Products({ darkMode }) {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
+
+  // Read retailer from URL query param
+  const retailerParam = new URLSearchParams(window.location.search).get('retailer') || 'All';
+  const [selectedRetailer] = useState(retailerParam);
+
   const s = getStyles(darkMode);
 
   useEffect(() => {
@@ -19,6 +24,7 @@ export default function Products({ darkMode }) {
   }, []);
 
   const filtered = products
+    .filter(p => selectedRetailer === 'All' || p.retailer_name === selectedRetailer)
     .filter(p => selectedCategory === 'All' || p.category_name === selectedCategory)
     .filter(p => !minPrice || parseFloat(p.price) >= parseFloat(minPrice))
     .filter(p => !maxPrice || parseFloat(p.price) <= parseFloat(maxPrice));
@@ -32,9 +38,9 @@ export default function Products({ darkMode }) {
   const clearFilters = () => { setSelectedCategory('All'); setMinPrice(''); setMaxPrice(''); setCurrentPage(1); };
 
   const exportCSV = () => {
-    const headers = ['SKU', 'Name', 'Category', 'Price', 'Availability', 'URL'];
+    const headers = ['SKU', 'Name', 'Category', 'Retailer', 'Price', 'Availability', 'URL'];
     const rows = filtered.map(p => [
-      p.sku, `"${p.name}"`, p.category_name, p.price,
+      p.sku, `"${p.name}"`, p.category_name, p.retailer_name, p.price,
       p.stock === 1 ? 'Available' : 'Out of Stock', p.source_url
     ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
@@ -42,7 +48,7 @@ export default function Products({ darkMode }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `products_${selectedCategory}.csv`;
+    a.download = `products_${selectedRetailer}_${selectedCategory}.csv`;
     a.click();
   };
 
@@ -51,7 +57,12 @@ export default function Products({ darkMode }) {
 
       {/* Header */}
       <div style={s.headerRow}>
-        <h2 style={s.heading}>📦 All Products</h2>
+        <div>
+          <h2 style={s.heading}>📦 All Products</h2>
+          {selectedRetailer !== 'All' && (
+            <p style={s.retailerFilter}>🏪 Filtering by: {selectedRetailer}</p>
+          )}
+        </div>
         <button style={s.exportBtn} onClick={exportCSV}>⬇️ Export CSV</button>
       </div>
 
@@ -163,8 +174,9 @@ export default function Products({ darkMode }) {
 
 const getStyles = (dark) => ({
   container: { padding: '24px', position: 'relative' },
-  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
+  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' },
   heading: { color: dark ? '#fff' : '#333', margin: 0 },
+  retailerFilter: { color: '#1890ff', fontSize: '14px', margin: '4px 0 0' },
   exportBtn: { padding: '10px 16px', background: '#52c41a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
   filterRow: { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' },
   select: { padding: '10px 16px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', cursor: 'pointer', minWidth: '200px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
