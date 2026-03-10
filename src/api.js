@@ -20,4 +20,11 @@ export const getProducts = () => djangoApi.get('/products/');
 export const getCategories = () => djangoApi.get('/categories/');
 export const getRetailers = () => djangoApi.get('/retailers/');
 export const searchProducts = (q, min, max) =>
-  fastapiApi.get('/search', { params: { q, min_price: min || undefined, max_price: max || undefined } });
+  fastapiApi.get('/search', {
+    params: {
+      q,
+      min_price: min || undefined,
+      max_price: max || undefined,
+      limit: 500
+    }
+  });
