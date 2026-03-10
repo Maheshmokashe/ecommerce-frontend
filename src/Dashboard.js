@@ -19,7 +19,7 @@ export default function Dashboard({ darkMode }) {
 
   useEffect(() => { loadData(); }, []);
 
-  const totalStock = products.filter(p => p.stock === 1).length;
+  const totalAvailable = products.filter(p => p.stock === 1).length;
   const avgPrice = products.length
     ? (products.reduce((sum, p) => sum + parseFloat(p.price), 0) / products.length).toFixed(2)
     : 0;
@@ -72,10 +72,22 @@ export default function Dashboard({ darkMode }) {
 
       {/* Overall Stats */}
       <div style={s.statsGrid}>
-        <div style={s.stat}><h1 style={s.statNum}>{products.length}</h1><p style={s.statLabel}>Total Products</p></div>
-        <div style={s.stat}><h1 style={s.statNum}>{categories.length}</h1><p style={s.statLabel}>Categories</p></div>
-        <div style={s.stat}><h1 style={s.statNum}>{retailers.length}</h1><p style={s.statLabel}>Retailers</p></div>
-        <div style={s.stat}><h1 style={s.statNum}>₹{avgPrice}</h1><p style={s.statLabel}>Avg Price</p></div>
+        <div style={s.stat}>
+          <h1 style={s.statNum}>{products.length}</h1>
+          <p style={s.statLabel}>Total Products</p>
+        </div>
+        <div style={s.stat}>
+          <h1 style={s.statNum}>{categories.length}</h1>
+          <p style={s.statLabel}>Categories</p>
+        </div>
+        <div style={s.stat}>
+          <h1 style={s.statNum}>{retailers.length}</h1>
+          <p style={s.statLabel}>Retailers</p>
+        </div>
+        <div style={s.stat}>
+          <h1 style={s.statNum}>₹{avgPrice}</h1>
+          <p style={s.statLabel}>Avg Price</p>
+        </div>
       </div>
 
       {/* Retailer Wise Stats */}
@@ -104,6 +116,10 @@ export default function Dashboard({ darkMode }) {
                 <span style={s.rStatLabel}>Avg Price</span>
               </div>
             </div>
+            <button style={s.viewProductsBtn}
+              onClick={() => window.location.href = `/products?retailer=${encodeURIComponent(r.name)}`}>
+              📦 View Products →
+            </button>
           </div>
         ))}
       </div>
@@ -151,7 +167,7 @@ const getStyles = (dark) => ({
   statNum: { color: dark ? '#fff' : '#333', margin: '0 0 8px' },
   statLabel: { color: dark ? '#aaa' : '#888', margin: 0 },
   sectionTitle: { color: dark ? '#fff' : '#333', margin: '0 0 16px' },
-  retailerGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginBottom: '32px' },
+  retailerGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px', marginBottom: '32px' },
   retailerCard: { background: dark ? '#1f1f1f' : 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', border: `1px solid ${dark ? '#333' : '#f0f0f0'}` },
   retailerHeader: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' },
   retailerIcon: { fontSize: '32px' },
@@ -161,6 +177,7 @@ const getStyles = (dark) => ({
   rStat: { textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '4px' },
   rStatNum: { fontSize: '20px', fontWeight: 'bold', color: dark ? '#fff' : '#333' },
   rStatLabel: { fontSize: '11px', color: dark ? '#aaa' : '#888' },
+  viewProductsBtn: { width: '100%', marginTop: '16px', padding: '10px', background: 'linear-gradient(135deg, #1890ff, #096dd9)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' },
   table: { width: '100%', borderCollapse: 'collapse', background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer' },
   th: { background: '#1890ff', color: 'white', padding: '12px 16px', textAlign: 'left' },
   tr: { borderBottom: `1px solid ${dark ? '#333' : '#f0f0f0'}`, background: dark ? '#1f1f1f' : 'white' },

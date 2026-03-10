@@ -8,7 +8,6 @@ export const fastapiApi = axios.create({
   baseURL: 'http://127.0.0.1:8001',
 });
 
-// Add JWT token to every request
 djangoApi.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -19,6 +18,7 @@ export const login = (data) => djangoApi.post('/token/', data);
 export const getProducts = () => djangoApi.get('/products/');
 export const getCategories = () => djangoApi.get('/categories/');
 export const getRetailers = () => djangoApi.get('/retailers/');
+export const deleteRetailer = (id) => djangoApi.delete(`/retailers/${id}/`);
 export const searchProducts = (q, min, max) =>
   fastapiApi.get('/search', {
     params: {
