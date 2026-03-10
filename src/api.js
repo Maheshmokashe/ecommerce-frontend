@@ -53,3 +53,4 @@ export const searchProductsAdvanced = (params) =>
   fastapiApi.get('/search', { params: { ...params, limit: 500 } });
 
 export const getSearchFilters = () => fastapiApi.get('/filters');
+export const getUploadLogs = () => djangoApi.get('/upload-logs/');
