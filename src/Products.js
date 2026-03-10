@@ -10,9 +10,11 @@ export default function Products({ darkMode }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [sortBy, setSortBy] = useState('default');
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [compareList, setCompareList] = useState([]);
+  const [showCompare, setShowCompare] = useState(false);
 
-  // Read retailer from URL query param
   const retailerParam = new URLSearchParams(window.location.search).get('retailer') || 'All';
   const [selectedRetailer] = useState(retailerParam);
 
@@ -27,7 +29,13 @@ export default function Products({ darkMode }) {
     .filter(p => selectedRetailer === 'All' || p.retailer_name === selectedRetailer)
     .filter(p => selectedCategory === 'All' || p.category_name === selectedCategory)
     .filter(p => !minPrice || parseFloat(p.price) >= parseFloat(minPrice))
-    .filter(p => !maxPrice || parseFloat(p.price) <= parseFloat(maxPrice));
+    .filter(p => !maxPrice || parseFloat(p.price) <= parseFloat(maxPrice))
+    .sort((a, b) => {
+      if (sortBy === 'price_asc') return parseFloat(a.price) - parseFloat(b.price);
+      if (sortBy === 'price_desc') return parseFloat(b.price) - parseFloat(a.price);
+      if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
+      return 0;
+    });
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -35,7 +43,17 @@ export default function Products({ darkMode }) {
   const handleCategory = (cat) => { setSelectedCategory(cat); setCurrentPage(1); };
   const handleMinPrice = (val) => { setMinPrice(val); setCurrentPage(1); };
   const handleMaxPrice = (val) => { setMaxPrice(val); setCurrentPage(1); };
-  const clearFilters = () => { setSelectedCategory('All'); setMinPrice(''); setMaxPrice(''); setCurrentPage(1); };
+  const clearFilters = () => { setSelectedCategory('All'); setMinPrice(''); setMaxPrice(''); setSortBy('default'); setCurrentPage(1); };
+
+  // Compare logic
+  const toggleCompare = (e, p) => {
+    e.stopPropagation();
+    setCompareList(prev => {
+      if (prev.find(x => x.id === p.id)) return prev.filter(x => x.id !== p.id);
+      if (prev.length >= 3) return [...prev.slice(1), p];
+      return [...prev, p];
+    });
+  };
 
   const exportCSV = () => {
     const headers = ['SKU', 'Name', 'Category', 'Retailer', 'Price', 'Availability', 'URL'];
@@ -63,7 +81,14 @@ export default function Products({ darkMode }) {
             <p style={s.retailerFilter}>🏪 Filtering by: {selectedRetailer}</p>
           )}
         </div>
-        <button style={s.exportBtn} onClick={exportCSV}>⬇️ Export CSV</button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {compareList.length >= 2 && (
+            <button style={s.compareBtn} onClick={() => setShowCompare(true)}>
+              ⚖️ Compare ({compareList.length})
+            </button>
+          )}
+          <button style={s.exportBtn} onClick={exportCSV}>⬇️ Export CSV</button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -76,34 +101,50 @@ export default function Products({ darkMode }) {
           value={minPrice} onChange={e => handleMinPrice(e.target.value)} />
         <input style={s.priceInput} type="number" placeholder="Max Price ₹"
           value={maxPrice} onChange={e => handleMaxPrice(e.target.value)} />
+        <select style={s.sortSelect} value={sortBy} onChange={e => { setSortBy(e.target.value); setCurrentPage(1); }}>
+          <option value="default">Sort: Default</option>
+          <option value="price_asc">Price: Low → High</option>
+          <option value="price_desc">Price: High → Low</option>
+          <option value="name_asc">Name: A → Z</option>
+        </select>
         <button style={s.clearBtn} onClick={clearFilters}>✕ Clear</button>
       </div>
 
       <p style={s.count}>
         Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} products
+        {compareList.length > 0 && <span style={s.compareHint}> · {compareList.length} selected for compare</span>}
       </p>
 
       {/* Product Grid */}
       <div style={s.grid}>
-        {paginated.map(p => (
-          <div key={p.id} style={s.card} onClick={() => setSelectedProduct(p)}>
-            {p.image_url
-              ? <img src={p.image_url} alt={p.name} style={s.image} onError={e => e.target.style.display = 'none'} />
-              : <div style={s.imagePlaceholder}>🖼️ No Image</div>
-            }
-            <div style={s.cardBody}>
-              <span style={s.badge}>{p.category_name}</span>
-              <h3 style={s.name}>{p.name}</h3>
-              <p style={s.sku}>SKU: {p.sku}</p>
-              <div style={s.footer}>
-                <span style={s.price}>₹{p.price}</span>
-                <span style={p.stock === 1 ? s.inStock : s.outStock}>
-                  {p.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
-                </span>
+        {paginated.map(p => {
+          const isCompared = compareList.find(x => x.id === p.id);
+          return (
+            <div key={p.id} style={{ ...s.card, ...(isCompared ? s.cardSelected : {}) }}
+              onClick={() => setSelectedProduct(p)}>
+              {p.image_url
+                ? <img src={p.image_url} alt={p.name} style={s.image} onError={e => e.target.style.display = 'none'} />
+                : <div style={s.imagePlaceholder}>🖼️ No Image</div>
+              }
+              <div style={s.cardBody}>
+                <span style={s.badge}>{p.category_name}</span>
+                <h3 style={s.name}>{p.name}</h3>
+                <p style={s.sku}>SKU: {p.sku}</p>
+                <div style={s.footer}>
+                  <span style={s.price}>₹{p.price}</span>
+                  <span style={p.stock === 1 ? s.inStock : s.outStock}>
+                    {p.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
+                  </span>
+                </div>
+                <button
+                  style={isCompared ? s.compareBtnActive : s.compareBtnSmall}
+                  onClick={e => toggleCompare(e, p)}>
+                  {isCompared ? '✓ Added to Compare' : '+ Compare'}
+                </button>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Pagination */}
@@ -158,12 +199,51 @@ export default function Products({ darkMode }) {
                   </div>
                 )}
                 {selectedProduct.source_url && (
-                  <button style={s.viewBtn}
-                    onClick={() => window.open(selectedProduct.source_url, '_blank')}>
+                  <button style={s.viewBtn} onClick={() => window.open(selectedProduct.source_url, '_blank')}>
                     🔗 View Product →
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compare Modal */}
+      {showCompare && (
+        <div style={s.overlay} onClick={() => setShowCompare(false)}>
+          <div style={{ ...s.modal, width: '95vw', maxWidth: '1100px' }} onClick={e => e.stopPropagation()}>
+            <button style={s.closeBtn} onClick={() => setShowCompare(false)}>✕</button>
+            <h2 style={{ ...s.modalName, marginBottom: '24px' }}>⚖️ Compare Products</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${compareList.length}, 1fr)`, gap: '20px' }}>
+              {compareList.map(p => (
+                <div key={p.id} style={s.compareCard}>
+                  {p.image_url
+                    ? <img src={p.image_url} alt={p.name} style={s.compareImage} onError={e => e.target.style.display = 'none'} />
+                    : <div style={{ ...s.imagePlaceholder, height: '160px' }}>🖼️</div>
+                  }
+                  <h3 style={{ ...s.modalName, fontSize: '15px' }}>{p.name}</h3>
+                  <table style={s.compareTable}>
+                    <tbody>
+                      <tr><td style={s.compareLabel}>SKU</td><td style={s.compareVal}>{p.sku}</td></tr>
+                      <tr><td style={s.compareLabel}>Category</td><td style={s.compareVal}>{p.category_name}</td></tr>
+                      <tr><td style={s.compareLabel}>Retailer</td><td style={s.compareVal}>{p.retailer_name}</td></tr>
+                      <tr><td style={s.compareLabel}>Price</td><td style={{ ...s.compareVal, color: '#52c41a', fontWeight: 'bold' }}>₹{p.price}</td></tr>
+                      <tr><td style={s.compareLabel}>Status</td>
+                        <td style={p.stock === 1 ? s.inStock : s.outStock}>
+                          {p.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  {p.source_url && (
+                    <button style={{ ...s.viewBtn, marginTop: '12px', padding: '10px' }}
+                      onClick={() => window.open(p.source_url, '_blank')}>
+                      🔗 View →
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -178,23 +258,29 @@ const getStyles = (dark) => ({
   heading: { color: dark ? '#fff' : '#333', margin: 0 },
   retailerFilter: { color: '#1890ff', fontSize: '14px', margin: '4px 0 0' },
   exportBtn: { padding: '10px 16px', background: '#52c41a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
+  compareBtn: { padding: '10px 16px', background: '#722ed1', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
   filterRow: { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' },
-  select: { padding: '10px 16px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', cursor: 'pointer', minWidth: '200px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
-  priceInput: { padding: '10px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', width: '130px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
+  select: { padding: '10px 16px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', cursor: 'pointer', minWidth: '180px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
+  sortSelect: { padding: '10px 16px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', cursor: 'pointer', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
+  priceInput: { padding: '10px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', width: '120px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
   clearBtn: { padding: '10px 16px', background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
   count: { color: dark ? '#aaa' : '#888', fontSize: '13px', marginBottom: '20px' },
+  compareHint: { color: '#722ed1', fontWeight: '500' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' },
-  card: { background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer' },
+  card: { background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer', border: '2px solid transparent' },
+  cardSelected: { border: '2px solid #722ed1', boxShadow: '0 0 0 3px rgba(114,46,209,0.15)' },
   image: { width: '100%', height: '200px', objectFit: 'cover' },
   imagePlaceholder: { width: '100%', height: '200px', background: dark ? '#2a2a2a' : '#f0f2f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' },
   cardBody: { padding: '12px' },
   badge: { display: 'inline-block', background: '#e6f7ff', color: '#1890ff', padding: '2px 10px', borderRadius: '20px', fontSize: '12px' },
   name: { margin: '8px 0 4px', color: dark ? '#fff' : '#333', fontSize: '15px' },
   sku: { color: '#999', fontSize: '12px', margin: '0 0 12px' },
-  footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${dark ? '#333' : '#f0f0f0'}`, paddingTop: '12px' },
+  footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${dark ? '#333' : '#f0f0f0'}`, paddingTop: '12px', marginBottom: '10px' },
   price: { color: '#52c41a', fontWeight: 'bold', fontSize: '18px' },
   inStock: { color: '#52c41a', fontSize: '13px', fontWeight: '500' },
   outStock: { color: '#ff4d4f', fontSize: '13px', fontWeight: '500' },
+  compareBtnSmall: { width: '100%', padding: '6px', background: 'transparent', border: `1px solid ${dark ? '#444' : '#ddd'}`, borderRadius: '6px', cursor: 'pointer', fontSize: '12px', color: dark ? '#aaa' : '#666' },
+  compareBtnActive: { width: '100%', padding: '6px', background: '#f9f0ff', border: '1px solid #722ed1', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', color: '#722ed1', fontWeight: '500' },
   pagination: { display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '32px', flexWrap: 'wrap' },
   pageBtn: { padding: '8px 14px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333', cursor: 'pointer', fontSize: '14px' },
   activePage: { background: '#1890ff', color: 'white', border: '1px solid #1890ff' },
@@ -215,4 +301,9 @@ const getStyles = (dark) => ({
   descTitle: { color: dark ? '#fff' : '#333', margin: '0 0 8px' },
   descText: { color: dark ? '#aaa' : '#666', fontSize: '14px', lineHeight: '1.6', margin: 0 },
   viewBtn: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #1890ff, #096dd9)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', cursor: 'pointer', fontWeight: '500' },
+  compareCard: { background: dark ? '#2a2a2a' : '#f9f9f9', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column' },
+  compareImage: { width: '100%', height: '160px', objectFit: 'cover', borderRadius: '8px', marginBottom: '12px' },
+  compareTable: { width: '100%', borderCollapse: 'collapse', marginTop: '12px' },
+  compareLabel: { color: dark ? '#aaa' : '#888', fontSize: '13px', padding: '6px 0', width: '40%' },
+  compareVal: { color: dark ? '#fff' : '#333', fontSize: '13px', padding: '6px 0' },
 });
