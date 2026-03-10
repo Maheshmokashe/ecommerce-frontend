@@ -9,6 +9,11 @@ import ActivityLog from './ActivityLog';
 import Categories from './Categories';
 import FeedScheduler from './FeedScheduler';
 
+function LoginWrapper() {
+  const navigate = useNavigate();
+  return <Login onLogin={() => navigate('/dashboard')} />;
+}
+
 function Layout({ darkMode, setDarkMode }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,7 +92,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Login />} />
+        <Route path="/" element={<LoginWrapper />} />
         <Route path="/*" element={<Layout darkMode={darkMode} setDarkMode={setDarkMode} />} />
       </Routes>
     </BrowserRouter>
