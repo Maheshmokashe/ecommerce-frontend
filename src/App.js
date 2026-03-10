@@ -7,6 +7,7 @@ import Products from './Products';
 import Search from './Search';
 import ActivityLog from './ActivityLog';
 import Categories from './Categories';
+import FeedScheduler from './FeedScheduler';
 
 function Layout({ darkMode, setDarkMode }) {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ function Layout({ darkMode, setDarkMode }) {
     { path: '/products', label: '📦 Products' },
     { path: '/search', label: '🔍 Search' },
     { path: '/activity-log', label: '📋 Activity Log' },
+    { path: '/feed-scheduler', label: '⏰ Feed Scheduler' },
   ];
 
   return (
@@ -72,6 +74,7 @@ function Layout({ darkMode, setDarkMode }) {
           <Route path="/products" element={<Products darkMode={darkMode} />} />
           <Route path="/search" element={<Search darkMode={darkMode} />} />
           <Route path="/activity-log" element={<ActivityLog darkMode={darkMode} />} />
+          <Route path="/feed-scheduler" element={<FeedScheduler darkMode={darkMode} />} />
         </Routes>
       </div>
     </div>

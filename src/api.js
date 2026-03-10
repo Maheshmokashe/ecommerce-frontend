@@ -56,3 +56,5 @@ export const getSearchFilters = () => fastapiApi.get('/filters');
 export const getUploadLogs = () => djangoApi.get('/upload-logs/');
 export const bulkDeleteProducts = (ids) => djangoApi.post('/bulk-delete/', { ids });
 export const getCategoryStats = () => djangoApi.get('/category-stats/');
+export const updateFeedUrl = (id, feed_url) => djangoApi.post(`/retailers/${id}/update-feed/`, { feed_url });
+export const refreshFeed = (id) => djangoApi.post(`/retailers/${id}/refresh-feed/`);
