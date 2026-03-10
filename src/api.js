@@ -48,3 +48,8 @@ export const getDiscount = (price, salePrice) => {
   if (s >= p || s <= 0) return null;
   return Math.round(((p - s) / p) * 100);
 };
+
+export const searchProductsAdvanced = (params) =>
+  fastapiApi.get('/search', { params: { ...params, limit: 500 } });
+
+export const getSearchFilters = () => fastapiApi.get('/filters');
