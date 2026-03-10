@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
-import { getProducts, getCategories, formatPrice, getDiscount } from './api';
+import { getProducts, getCategories, formatPrice, getDiscount, bulkDeleteProducts } from './api';
 
 const PAGE_SIZE = 20;
 
 export default function Products({ darkMode }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedBrand, setSelectedBrand] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
@@ -16,18 +14,28 @@ export default function Products({ darkMode }) {
   const [activeImage, setActiveImage] = useState('');
   const [compareList, setCompareList] = useState([]);
   const [showCompare, setShowCompare] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState([]);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('All');
 
-  const retailerParam = new URLSearchParams(window.location.search).get('retailer') || 'All';
+  const params = new URLSearchParams(window.location.search);
+  const retailerParam = params.get('retailer') || 'All';
+  const categoryParam = params.get('category') || 'All';
   const [selectedRetailer] = useState(retailerParam);
+  const [selectedCategory, setSelectedCategory] = useState(categoryParam);
+
   const s = getStyles(darkMode);
 
-  useEffect(() => {
+  const loadProducts = () => {
     getProducts().then(res => setProducts(res.data));
     getCategories().then(res => setCategories(res.data));
-  }, []);
+  };
+
+  useEffect(() => { loadProducts(); }, []);
 
   const brands = ['All', ...new Set(products.map(p => p.brand).filter(Boolean).sort())];
-
   const effectivePrice = (p) => p.sale_price ? parseFloat(p.sale_price) : parseFloat(p.price);
 
   const filtered = products
@@ -52,7 +60,11 @@ export default function Products({ darkMode }) {
     setMinPrice(''); setMaxPrice(''); setSortBy('default'); setCurrentPage(1);
   };
 
-  const openModal = (p) => { setSelectedProduct(p); setActiveImage(p.image_url); };
+  const openModal = (p) => {
+    if (bulkMode) return;
+    setSelectedProduct(p);
+    setActiveImage(p.image_url);
+  };
 
   const toggleCompare = (e, p) => {
     e.stopPropagation();
@@ -63,17 +75,69 @@ export default function Products({ darkMode }) {
     });
   };
 
+  const toggleBulkSelect = (e, p) => {
+    if (e) e.stopPropagation();
+    setBulkSelected(prev =>
+      prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+    );
+  };
+
+  const selectAllOnPage = () => {
+    const pageIds = paginated.map(p => p.id);
+    const allSelected = pageIds.every(id => bulkSelected.includes(id));
+    if (allSelected) {
+      setBulkSelected(prev => prev.filter(id => !pageIds.includes(id)));
+    } else {
+      setBulkSelected(prev => [...new Set([...prev, ...pageIds])]);
+    }
+  };
+
+  const selectAllFiltered = () => setBulkSelected(filtered.map(p => p.id));
+  const clearBulkSelection = () => { setBulkSelected([]); setBulkMode(false); };
+
+  const bulkExportCSV = () => {
+    const selected = products.filter(p => bulkSelected.includes(p.id));
+    const headers = ['SKU', 'Name', 'Brand', 'Category', 'Retailer', 'Currency', 'Price', 'Sale Price', 'Availability', 'Colors', 'Sizes', 'URL'];
+    const rows = selected.map(p => [
+      p.sku, `"${p.name}"`, p.brand, p.category_name, p.retailer_name,
+      p.currency, p.price, p.sale_price || '',
+      p.stock === 1 ? 'Available' : 'Out of Stock',
+      `"${p.colors}"`, `"${p.sizes}"`, p.source_url
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bulk_export_${bulkSelected.length}_products.csv`;
+    a.click();
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Delete ${bulkSelected.length} selected products? This cannot be undone!`)) return;
+    setDeleting(true);
+    try {
+      const res = await bulkDeleteProducts(bulkSelected);
+      setBulkMsg(`✅ ${res.data.deleted} products deleted successfully!`);
+      setBulkSelected([]);
+      setBulkMode(false);
+      loadProducts();
+      setTimeout(() => setBulkMsg(''), 4000);
+    } catch {
+      setBulkMsg('❌ Delete failed. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const exportCSV = () => {
-    const headers = ['SKU', 'Name', 'Brand', 'Category', 'Retailer', 'Currency', 'Price', 'Sale Price', 'Discount %', 'Availability', 'Colors', 'Sizes', 'URL'];
-    const rows = filtered.map(p => {
-      const disc = getDiscount(p.price, p.sale_price);
-      return [
-        p.sku, `"${p.name}"`, p.brand, p.category_name, p.retailer_name,
-        p.currency, p.price, p.sale_price || '', disc ? `${disc}%` : '',
-        p.stock === 1 ? 'Available' : 'Out of Stock',
-        `"${p.colors}"`, `"${p.sizes}"`, p.source_url
-      ];
-    });
+    const headers = ['SKU', 'Name', 'Brand', 'Category', 'Retailer', 'Currency', 'Price', 'Sale Price', 'Availability', 'Colors', 'Sizes', 'URL'];
+    const rows = filtered.map(p => [
+      p.sku, `"${p.name}"`, p.brand, p.category_name, p.retailer_name,
+      p.currency, p.price, p.sale_price || '',
+      p.stock === 1 ? 'Available' : 'Out of Stock',
+      `"${p.colors}"`, `"${p.sizes}"`, p.source_url
+    ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -113,16 +177,23 @@ export default function Products({ darkMode }) {
     );
   };
 
+  const allPageSelected = paginated.length > 0 && paginated.every(p => bulkSelected.includes(p.id));
+
   return (
     <div style={s.container}>
+
+      {/* Header */}
       <div style={s.headerRow}>
         <div>
           <h2 style={s.heading}>📦 All Products</h2>
-          {selectedRetailer !== 'All' && (
-            <p style={s.retailerFilter}>🏪 Filtering by: {selectedRetailer}</p>
-          )}
+          {selectedRetailer !== 'All' && <p style={s.filterInfo}>🏪 Retailer: {selectedRetailer}</p>}
+          {selectedCategory !== 'All' && <p style={s.filterInfo}>🗂️ Category: {selectedCategory}</p>}
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button style={bulkMode ? s.bulkModeActiveBtn : s.bulkModeBtn}
+            onClick={() => { setBulkMode(!bulkMode); setBulkSelected([]); }}>
+            {bulkMode ? '✕ Exit Bulk Mode' : '☑️ Bulk Select'}
+          </button>
           {compareList.length >= 2 && (
             <button style={s.compareBtn} onClick={() => setShowCompare(true)}>
               ⚖️ Compare ({compareList.length})
@@ -132,12 +203,50 @@ export default function Products({ darkMode }) {
         </div>
       </div>
 
+      {/* Bulk Action Bar */}
+      {bulkMode && (
+        <div style={s.bulkBar}>
+          <div style={s.bulkLeft}>
+            <input type="checkbox" checked={allPageSelected} onChange={selectAllOnPage}
+              style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+            <span style={s.bulkCount}>
+              {bulkSelected.length > 0
+                ? `${bulkSelected.length} product(s) selected`
+                : 'Select products below'}
+            </span>
+            {bulkSelected.length > 0 && (
+              <button style={s.bulkClearBtn} onClick={clearBulkSelection}>Clear</button>
+            )}
+            <button style={s.selectAllFilteredBtn} onClick={selectAllFiltered}>
+              Select All {filtered.length} filtered
+            </button>
+          </div>
+          {bulkSelected.length > 0 && (
+            <div style={s.bulkActions}>
+              <button style={s.bulkExportBtn} onClick={bulkExportCSV}>
+                ⬇️ Export {bulkSelected.length} Selected
+              </button>
+              <button style={s.bulkDeleteBtn} onClick={handleBulkDelete} disabled={deleting}>
+                {deleting ? '⏳ Deleting...' : `🗑️ Delete ${bulkSelected.length} Selected`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {bulkMsg && (
+        <div style={bulkMsg.startsWith('✅') ? s.successMsg : s.errorMsg}>{bulkMsg}</div>
+      )}
+
+      {/* Filters */}
       <div style={s.filterRow}>
-        <select style={s.select} value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setCurrentPage(1); }}>
+        <select style={s.select} value={selectedCategory}
+          onChange={e => { setSelectedCategory(e.target.value); setCurrentPage(1); }}>
           <option value="All">All Categories</option>
           {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
-        <select style={s.select} value={selectedBrand} onChange={e => { setSelectedBrand(e.target.value); setCurrentPage(1); }}>
+        <select style={s.select} value={selectedBrand}
+          onChange={e => { setSelectedBrand(e.target.value); setCurrentPage(1); }}>
           <option value="All">All Brands</option>
           {brands.filter(b => b !== 'All').map(b => <option key={b} value={b}>{b}</option>)}
         </select>
@@ -145,7 +254,8 @@ export default function Products({ darkMode }) {
           value={minPrice} onChange={e => { setMinPrice(e.target.value); setCurrentPage(1); }} />
         <input style={s.priceInput} type="number" placeholder="Max Price"
           value={maxPrice} onChange={e => { setMaxPrice(e.target.value); setCurrentPage(1); }} />
-        <select style={s.sortSelect} value={sortBy} onChange={e => { setSortBy(e.target.value); setCurrentPage(1); }}>
+        <select style={s.sortSelect} value={sortBy}
+          onChange={e => { setSortBy(e.target.value); setCurrentPage(1); }}>
           <option value="default">Sort: Default</option>
           <option value="price_asc">Price: Low → High</option>
           <option value="price_desc">Price: High → Low</option>
@@ -157,22 +267,35 @@ export default function Products({ darkMode }) {
 
       <p style={s.count}>
         Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} products
-        {compareList.length > 0 && <span style={s.compareHint}> · {compareList.length} selected for compare</span>}
+        {compareList.length > 0 && <span style={s.compareHint}> · {compareList.length} for compare</span>}
       </p>
 
+      {/* Product Grid */}
       <div style={s.grid}>
         {paginated.map(p => {
           const isCompared = compareList.find(x => x.id === p.id);
+          const isBulkSelected = bulkSelected.includes(p.id);
           const disc = getDiscount(p.price, p.sale_price);
           return (
-            <div key={p.id} style={{ ...s.card, ...(isCompared ? s.cardSelected : {}) }}
-              onClick={() => openModal(p)}>
+            <div key={p.id} style={{
+              ...s.card,
+              ...(isCompared ? s.cardSelected : {}),
+              ...(isBulkSelected ? s.cardBulkSelected : {}),
+            }}
+              onClick={() => bulkMode ? toggleBulkSelect(null, p) : openModal(p)}>
               <div style={{ position: 'relative' }}>
                 {p.image_url
-                  ? <img src={p.image_url} alt={p.name} style={s.image} onError={e => e.target.style.display = 'none'} />
+                  ? <img src={p.image_url} alt={p.name} style={s.image}
+                      onError={e => e.target.style.display = 'none'} />
                   : <div style={s.imagePlaceholder}>🖼️ No Image</div>
                 }
                 {disc && <span style={s.saleBadge}>SALE -{disc}%</span>}
+                {bulkMode && (
+                  <div style={s.bulkCheckbox} onClick={e => toggleBulkSelect(e, p)}>
+                    <input type="checkbox" checked={isBulkSelected} onChange={() => {}}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#1890ff' }} />
+                  </div>
+                )}
               </div>
               <div style={s.cardBody}>
                 <span style={s.badge}>{p.category_name}</span>
@@ -186,10 +309,12 @@ export default function Products({ darkMode }) {
                     {p.stock === 1 ? '✅' : '❌'}
                   </span>
                 </div>
-                <button style={isCompared ? s.compareBtnActive : s.compareBtnSmall}
-                  onClick={e => toggleCompare(e, p)}>
-                  {isCompared ? '✓ Added to Compare' : '+ Compare'}
-                </button>
+                {!bulkMode && (
+                  <button style={isCompared ? s.compareBtnActive : s.compareBtnSmall}
+                    onClick={e => toggleCompare(e, p)}>
+                    {isCompared ? '✓ Added to Compare' : '+ Compare'}
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -207,7 +332,8 @@ export default function Products({ darkMode }) {
           else if (currentPage >= totalPages - 2) page = totalPages - 4 + i;
           else page = currentPage - 2 + i;
           return (
-            <button key={page} style={{ ...s.pageBtn, ...(currentPage === page ? s.activePage : {}) }}
+            <button key={page}
+              style={{ ...s.pageBtn, ...(currentPage === page ? s.activePage : {}) }}
               onClick={() => setCurrentPage(page)}>{page}</button>
           );
         })}
@@ -241,14 +367,12 @@ export default function Products({ darkMode }) {
                 <p style={s.modalSku}>SKU: {selectedProduct.sku}</p>
                 {selectedProduct.retailer_name && <p style={s.retailerTag}>🏪 {selectedProduct.retailer_name}</p>}
                 {selectedProduct.brand && <p style={s.brandTag}>🏷️ Brand: <strong>{selectedProduct.brand}</strong></p>}
-
                 <div style={s.modalPriceRow}>
                   <PriceDisplay p={selectedProduct} large={true} />
                   <span style={selectedProduct.stock === 1 ? s.inStock : s.outStock}>
                     {selectedProduct.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
                   </span>
                 </div>
-
                 {selectedProduct.colors && (
                   <div style={s.infoBox}>
                     <h4 style={s.infoTitle}>🎨 Colors</h4>
@@ -259,7 +383,6 @@ export default function Products({ darkMode }) {
                     </div>
                   </div>
                 )}
-
                 {selectedProduct.sizes && (
                   <div style={s.infoBox}>
                     <h4 style={s.infoTitle}>📏 Sizes</h4>
@@ -270,16 +393,15 @@ export default function Products({ darkMode }) {
                     </div>
                   </div>
                 )}
-
                 {selectedProduct.description && (
                   <div style={s.descBox}>
                     <h4 style={s.descTitle}>📝 Description</h4>
                     <p style={s.descText}>{selectedProduct.description.slice(0, 300)}...</p>
                   </div>
                 )}
-
                 {selectedProduct.source_url && (
-                  <button style={s.viewBtn} onClick={() => window.open(selectedProduct.source_url, '_blank')}>
+                  <button style={s.viewBtn}
+                    onClick={() => window.open(selectedProduct.source_url, '_blank')}>
                     🔗 View Product →
                   </button>
                 )}
@@ -299,7 +421,8 @@ export default function Products({ darkMode }) {
               {compareList.map(p => (
                 <div key={p.id} style={s.compareCard}>
                   {p.image_url
-                    ? <img src={p.image_url} alt={p.name} style={s.compareImage} onError={e => e.target.style.display = 'none'} />
+                    ? <img src={p.image_url} alt={p.name} style={s.compareImage}
+                        onError={e => e.target.style.display = 'none'} />
                     : <div style={{ ...s.imagePlaceholder, height: '160px' }}>🖼️</div>
                   }
                   <h3 style={{ ...s.modalName, fontSize: '15px' }}>{p.name}</h3>
@@ -328,14 +451,16 @@ export default function Products({ darkMode }) {
                           )}
                         </td>
                       </tr>
-                      <tr><td style={s.compareLabel}>Discount</td>
+                      <tr>
+                        <td style={s.compareLabel}>Discount</td>
                         <td style={{ ...s.compareVal, color: '#ff4d4f', fontWeight: 'bold' }}>
                           {getDiscount(p.price, p.sale_price) ? `${getDiscount(p.price, p.sale_price)}% OFF` : '—'}
                         </td>
                       </tr>
                       <tr><td style={s.compareLabel}>Colors</td><td style={s.compareVal}>{p.colors || '—'}</td></tr>
                       <tr><td style={s.compareLabel}>Sizes</td><td style={s.compareVal}>{p.sizes || '—'}</td></tr>
-                      <tr><td style={s.compareLabel}>Status</td>
+                      <tr>
+                        <td style={s.compareLabel}>Status</td>
                         <td style={p.stock === 1 ? s.inStock : s.outStock}>
                           {p.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
                         </td>
@@ -359,12 +484,24 @@ export default function Products({ darkMode }) {
 }
 
 const getStyles = (dark) => ({
-  container: { padding: '24px' },
-  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' },
+  container: { padding: '24px', position: 'relative' },
+  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' },
   heading: { color: dark ? '#fff' : '#333', margin: 0 },
-  retailerFilter: { color: '#1890ff', fontSize: '14px', margin: '4px 0 0' },
+  filterInfo: { color: '#1890ff', fontSize: '14px', margin: '4px 0 0' },
   exportBtn: { padding: '10px 16px', background: '#52c41a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
   compareBtn: { padding: '10px 16px', background: '#722ed1', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
+  bulkModeBtn: { padding: '10px 16px', background: dark ? '#2a2a2a' : '#f0f2f5', color: dark ? '#fff' : '#333', border: `1px solid ${dark ? '#444' : '#ddd'}`, borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
+  bulkModeActiveBtn: { padding: '10px 16px', background: '#1890ff', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
+  bulkBar: { background: dark ? '#1f1f1f' : '#e6f7ff', border: `1px solid ${dark ? '#333' : '#91d5ff'}`, borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' },
+  bulkLeft: { display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' },
+  bulkCount: { color: dark ? '#fff' : '#1890ff', fontWeight: '500', fontSize: '14px' },
+  bulkClearBtn: { padding: '4px 12px', background: 'transparent', border: `1px solid ${dark ? '#444' : '#1890ff'}`, color: dark ? '#aaa' : '#1890ff', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' },
+  selectAllFilteredBtn: { padding: '4px 12px', background: 'transparent', border: `1px solid ${dark ? '#444' : '#1890ff'}`, color: dark ? '#aaa' : '#1890ff', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' },
+  bulkActions: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+  bulkExportBtn: { padding: '8px 16px', background: '#52c41a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' },
+  bulkDeleteBtn: { padding: '8px 16px', background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' },
+  successMsg: { background: '#f6ffed', border: '1px solid #b7eb8f', color: '#52c41a', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '14px' },
+  errorMsg: { background: '#fff2f0', border: '1px solid #ffccc7', color: '#ff4d4f', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '14px' },
   filterRow: { display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' },
   select: { padding: '10px 12px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '13px', cursor: 'pointer', minWidth: '150px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
   sortSelect: { padding: '10px 12px', borderRadius: '6px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '13px', cursor: 'pointer', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
@@ -375,9 +512,11 @@ const getStyles = (dark) => ({
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' },
   card: { background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer', border: '2px solid transparent' },
   cardSelected: { border: '2px solid #722ed1', boxShadow: '0 0 0 3px rgba(114,46,209,0.15)' },
+  cardBulkSelected: { border: '2px solid #1890ff', boxShadow: '0 0 0 3px rgba(24,144,255,0.15)' },
   image: { width: '100%', height: '200px', objectFit: 'cover' },
   imagePlaceholder: { width: '100%', height: '200px', background: dark ? '#2a2a2a' : '#f0f2f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' },
   saleBadge: { position: 'absolute', top: '10px', left: '10px', background: '#ff4d4f', color: 'white', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' },
+  bulkCheckbox: { position: 'absolute', top: '10px', right: '10px', background: 'white', borderRadius: '4px', padding: '2px', boxShadow: '0 2px 6px rgba(0,0,0,0.2)' },
   cardBody: { padding: '12px' },
   badge: { display: 'inline-block', background: '#e6f7ff', color: '#1890ff', padding: '2px 10px', borderRadius: '20px', fontSize: '12px' },
   name: { margin: '8px 0 4px', color: dark ? '#fff' : '#333', fontSize: '14px' },

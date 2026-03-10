@@ -6,6 +6,7 @@ import Retailers from './Retailers';
 import Products from './Products';
 import Search from './Search';
 import ActivityLog from './ActivityLog';
+import Categories from './Categories';
 
 function Layout({ darkMode, setDarkMode }) {
   const navigate = useNavigate();
@@ -17,13 +18,10 @@ function Layout({ darkMode, setDarkMode }) {
     navigate('/');
   };
 
-  const handleSelectRetailer = (retailerName) => {
-    navigate(`/products?retailer=${encodeURIComponent(retailerName)}`);
-  };
-
   const navItems = [
     { path: '/dashboard', label: '📊 Dashboard' },
     { path: '/retailers', label: '🏪 Retailers' },
+    { path: '/categories', label: '🗂️ Categories' },
     { path: '/products', label: '📦 Products' },
     { path: '/search', label: '🔍 Search' },
     { path: '/activity-log', label: '📋 Activity Log' },
@@ -31,7 +29,6 @@ function Layout({ darkMode, setDarkMode }) {
 
   return (
     <div style={s.appContainer}>
-      {/* Sidebar */}
       <div style={s.sidebar}>
         <div style={s.logo}>
           <span style={s.logoIcon}>🛒</span>
@@ -61,11 +58,17 @@ function Layout({ darkMode, setDarkMode }) {
         </div>
       </div>
 
-      {/* Main Content */}
       <div style={s.mainContent}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard darkMode={darkMode} />} />
-          <Route path="/retailers" element={<Retailers darkMode={darkMode} onSelectRetailer={handleSelectRetailer} />} />
+          <Route path="/retailers" element={
+            <Retailers darkMode={darkMode}
+              onSelectRetailer={(name) => navigate(`/products?retailer=${encodeURIComponent(name)}`)} />
+          } />
+          <Route path="/categories" element={
+            <Categories darkMode={darkMode}
+              onSelectCategory={(name) => navigate(`/products?category=${encodeURIComponent(name)}`)} />
+          } />
           <Route path="/products" element={<Products darkMode={darkMode} />} />
           <Route path="/search" element={<Search darkMode={darkMode} />} />
           <Route path="/activity-log" element={<ActivityLog darkMode={darkMode} />} />
@@ -122,16 +125,12 @@ const getStyles = (dark) => ({
     fontWeight: '700',
     letterSpacing: '0.5px',
   },
-  nav: {
-    flex: 1,
-    padding: '16px 0',
-  },
+  nav: { flex: 1, padding: '16px 0' },
   navItem: {
     padding: '12px 20px',
     color: 'rgba(255,255,255,0.65)',
     cursor: 'pointer',
     fontSize: '14px',
-    transition: 'all 0.2s',
     borderLeft: '3px solid transparent',
     display: 'flex',
     alignItems: 'center',
