@@ -28,3 +28,23 @@ export const searchProducts = (q, min, max) =>
       limit: 500
     }
   });
+
+// Format price with correct currency symbol
+export const formatPrice = (price, currency = '₹') => {
+  if (!price) return `${currency}0`;
+  const num = parseFloat(price);
+  if (currency === '£' || currency === '$' || currency === '€') {
+    return `${currency}${num.toFixed(2)}`;
+  }
+  // Indian rupee formatting with commas (e.g. ₹1,386)
+  return `${currency}${Math.round(num).toLocaleString('en-IN')}`;
+};
+
+// Calculate discount percentage between original and sale price
+export const getDiscount = (price, salePrice) => {
+  if (!salePrice || !price) return null;
+  const p = parseFloat(price);
+  const s = parseFloat(salePrice);
+  if (s >= p || s <= 0) return null;
+  return Math.round(((p - s) / p) * 100);
+};

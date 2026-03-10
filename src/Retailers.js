@@ -6,6 +6,7 @@ export default function Retailers({ darkMode, onSelectRetailer }) {
   const [productCounts, setProductCounts] = useState({});
   const [availableCounts, setAvailableCounts] = useState({});
   const [avgPrices, setAvgPrices] = useState({});
+  const [currencies, setCurrencies] = useState({});
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState('');
@@ -14,15 +15,14 @@ export default function Retailers({ darkMode, onSelectRetailer }) {
   const loadData = () => {
     getRetailers().then(res => setRetailers(res.data));
     getProducts().then(res => {
-      const counts = {};
-      const available = {};
-      const prices = {};
+      const counts = {}, available = {}, prices = {}, curr = {};
       res.data.forEach(p => {
         if (p.retailer_name) {
           counts[p.retailer_name] = (counts[p.retailer_name] || 0) + 1;
           if (p.stock === 1) available[p.retailer_name] = (available[p.retailer_name] || 0) + 1;
           prices[p.retailer_name] = prices[p.retailer_name] || [];
           prices[p.retailer_name].push(parseFloat(p.price));
+          if (!curr[p.retailer_name]) curr[p.retailer_name] = p.currency || '₹';
         }
       });
       const avgP = {};
@@ -32,6 +32,7 @@ export default function Retailers({ darkMode, onSelectRetailer }) {
       setProductCounts(counts);
       setAvailableCounts(available);
       setAvgPrices(avgP);
+      setCurrencies(curr);
     });
   };
 
@@ -65,53 +66,58 @@ export default function Retailers({ darkMode, onSelectRetailer }) {
       )}
 
       <div style={s.grid}>
-        {retailers.map(r => (
-          <div key={r.id} style={s.card}>
-            <div style={s.cardTop}>
-              <div style={s.iconBox}>🏬</div>
-              <div style={s.headerInfo}>
-                <h3 style={s.name}>{r.name}</h3>
-                <span style={s.activeTag}>● Active</span>
+        {retailers.map(r => {
+          const currency = currencies[r.name] || '₹';
+          return (
+            <div key={r.id} style={s.card}>
+              <div style={s.cardTop}>
+                <div style={s.iconBox}>🏬</div>
+                <div style={s.headerInfo}>
+                  <h3 style={s.name}>{r.name}</h3>
+                  <span style={s.activeTag}>● Active</span>
+                </div>
               </div>
-            </div>
 
-            {r.website && (
-              <a href={r.website} target="_blank" rel="noreferrer" style={s.website}
-                onClick={e => e.stopPropagation()}>
-                🌐 {r.website.replace('https://', '').replace('www.', '')}
-              </a>
-            )}
-
-            <div style={s.statsRow}>
-              <div style={s.stat}>
-                <span style={s.statNum}>{productCounts[r.name] || 0}</span>
-                <span style={s.statLabel}>Products</span>
-              </div>
-              <div style={s.stat}>
-                <span style={{ ...s.statNum, color: '#52c41a' }}>{availableCounts[r.name] || 0}</span>
-                <span style={s.statLabel}>Available</span>
-              </div>
-              <div style={s.stat}>
-                <span style={{ ...s.statNum, color: '#1890ff' }}>₹{avgPrices[r.name] || 0}</span>
-                <span style={s.statLabel}>Avg Price</span>
-              </div>
-            </div>
-
-            <div style={s.footer}>
-              <button style={s.viewBtn} onClick={() => onSelectRetailer(r.name)}>
-                📦 View Products →
-              </button>
               {r.website && (
-                <button style={s.siteBtn} onClick={() => window.open(r.website, '_blank')}>
-                  🌐 Visit
-                </button>
+                <a href={r.website} target="_blank" rel="noreferrer" style={s.website}
+                  onClick={e => e.stopPropagation()}>
+                  🌐 {r.website.replace('https://', '').replace('www.', '')}
+                </a>
               )}
-              <button style={s.deleteBtn} onClick={() => setConfirmDelete(r)}>
-                🗑️
-              </button>
+
+              <div style={s.statsRow}>
+                <div style={s.stat}>
+                  <span style={s.statNum}>{productCounts[r.name] || 0}</span>
+                  <span style={s.statLabel}>Products</span>
+                </div>
+                <div style={s.stat}>
+                  <span style={{ ...s.statNum, color: '#52c41a' }}>{availableCounts[r.name] || 0}</span>
+                  <span style={s.statLabel}>Available</span>
+                </div>
+                <div style={s.stat}>
+                  <span style={{ ...s.statNum, color: '#1890ff' }}>
+                    {currency}{avgPrices[r.name] || 0}
+                  </span>
+                  <span style={s.statLabel}>Avg Price</span>
+                </div>
+              </div>
+
+              <div style={s.footer}>
+                <button style={s.viewBtn} onClick={() => onSelectRetailer(r.name)}>
+                  📦 View Products →
+                </button>
+                {r.website && (
+                  <button style={s.siteBtn} onClick={() => window.open(r.website, '_blank')}>
+                    🌐 Visit
+                  </button>
+                )}
+                <button style={s.deleteBtn} onClick={() => setConfirmDelete(r)}>
+                  🗑️
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Confirm Delete Modal */}
@@ -127,9 +133,7 @@ export default function Retailers({ darkMode, onSelectRetailer }) {
               ⚠️ This will permanently delete <strong>{productCounts[confirmDelete.name] || 0} products</strong> and cannot be undone!
             </p>
             <div style={s.modalBtns}>
-              <button style={s.cancelBtn} onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
+              <button style={s.cancelBtn} onClick={() => setConfirmDelete(null)}>Cancel</button>
               <button style={s.confirmDeleteBtn} onClick={handleDelete} disabled={deleting}>
                 {deleting ? '⏳ Deleting...' : '🗑️ Yes, Delete Everything'}
               </button>
@@ -163,7 +167,6 @@ const getStyles = (dark) => ({
   viewBtn: { flex: 1, padding: '10px', background: 'linear-gradient(135deg, #1890ff, #096dd9)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' },
   siteBtn: { padding: '10px 14px', background: dark ? '#2a2a2a' : '#f0f2f5', color: dark ? '#fff' : '#333', border: `1px solid ${dark ? '#444' : '#ddd'}`, borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
   deleteBtn: { padding: '10px 14px', background: '#fff2f0', color: '#ff4d4f', border: '1px solid #ffccc7', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' },
-  // Confirm Modal
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   modal: { background: dark ? '#1f1f1f' : 'white', borderRadius: '16px', width: '440px', maxWidth: '90vw', padding: '40px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' },
   modalIcon: { fontSize: '48px', marginBottom: '16px' },

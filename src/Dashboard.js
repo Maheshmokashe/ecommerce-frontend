@@ -19,20 +19,16 @@ export default function Dashboard({ darkMode }) {
 
   useEffect(() => { loadData(); }, []);
 
-  const avgPrice = products.length
-    ? (products.reduce((sum, p) => sum + parseFloat(p.price), 0) / products.length).toFixed(2)
-    : 0;
-
   const retailerStats = retailers.map(r => {
     const rProducts = products.filter(p => p.retailer_name === r.name);
     const available = rProducts.filter(p => p.stock === 1).length;
     const avgP = rProducts.length
       ? (rProducts.reduce((sum, p) => sum + parseFloat(p.price), 0) / rProducts.length).toFixed(0)
       : 0;
-    return { ...r, count: rProducts.length, available, avgPrice: avgP };
+    const currency = rProducts.length > 0 ? (rProducts[0].currency || '₹') : '₹';
+    return { ...r, count: rProducts.length, available, avgPrice: avgP, currency };
   });
 
-  // New Arrivals — last 10 products by created_at
   const newArrivals = [...products]
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 8);
@@ -73,12 +69,20 @@ export default function Dashboard({ darkMode }) {
         </div>
       </div>
 
-      {/* Overall Stats */}
+      {/* Overall Stats — 3 cards only */}
       <div style={s.statsGrid}>
-        <div style={s.stat}><h1 style={s.statNum}>{products.length}</h1><p style={s.statLabel}>Total Products</p></div>
-        <div style={s.stat}><h1 style={s.statNum}>{categories.length}</h1><p style={s.statLabel}>Categories</p></div>
-        <div style={s.stat}><h1 style={s.statNum}>{retailers.length}</h1><p style={s.statLabel}>Retailers</p></div>
-        <div style={s.stat}><h1 style={s.statNum}>₹{avgPrice}</h1><p style={s.statLabel}>Avg Price</p></div>
+        <div style={s.stat}>
+          <h1 style={s.statNum}>{products.length}</h1>
+          <p style={s.statLabel}>Total Products</p>
+        </div>
+        <div style={s.stat}>
+          <h1 style={s.statNum}>{categories.length}</h1>
+          <p style={s.statLabel}>Categories</p>
+        </div>
+        <div style={s.stat}>
+          <h1 style={s.statNum}>{retailers.length}</h1>
+          <p style={s.statLabel}>Retailers</p>
+        </div>
       </div>
 
       {/* Retailer Wise Stats */}
@@ -103,7 +107,7 @@ export default function Dashboard({ darkMode }) {
                 <span style={s.rStatLabel}>Available</span>
               </div>
               <div style={s.rStat}>
-                <span style={{ ...s.rStatNum, color: '#1890ff' }}>₹{r.avgPrice}</span>
+                <span style={{ ...s.rStatNum, color: '#1890ff' }}>{r.currency}{r.avgPrice}</span>
                 <span style={s.rStatLabel}>Avg Price</span>
               </div>
             </div>
@@ -122,13 +126,18 @@ export default function Dashboard({ darkMode }) {
           <div key={p.id} style={s.arrivalCard}
             onClick={() => p.source_url && window.open(p.source_url, '_blank')}>
             {p.image_url
-              ? <img src={p.image_url} alt={p.name} style={s.arrivalImage} onError={e => e.target.style.display = 'none'} />
+              ? <img src={p.image_url} alt={p.name} style={s.arrivalImage}
+                  onError={e => e.target.style.display = 'none'} />
               : <div style={s.arrivalPlaceholder}>🖼️</div>
             }
             <div style={s.arrivalBody}>
-              <p style={s.arrivalName}>{p.name.slice(0, 40)}{p.name.length > 40 ? '...' : ''}</p>
+              <p style={s.arrivalName}>
+                {p.name.slice(0, 40)}{p.name.length > 40 ? '...' : ''}
+              </p>
               <div style={s.arrivalFooter}>
-                <span style={s.arrivalPrice}>₹{p.price}</span>
+                <span style={s.arrivalPrice}>
+                  {p.currency || '₹'}{parseFloat(p.price).toFixed(2)}
+                </span>
                 <span style={s.arrivalRetailer}>{p.retailer_name}</span>
               </div>
             </div>
@@ -141,7 +150,8 @@ export default function Dashboard({ darkMode }) {
       <table style={s.table}>
         <thead>
           <tr style={s.th}>
-            <th>SKU</th><th>Name</th><th>Brand</th><th>Category</th><th>Retailer</th><th>Price</th><th>Status</th>
+            <th>SKU</th><th>Name</th><th>Brand</th><th>Category</th>
+            <th>Retailer</th><th>Price</th><th>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -155,7 +165,7 @@ export default function Dashboard({ darkMode }) {
               <td style={s.td}>{p.brand || '—'}</td>
               <td style={s.td}>{p.category_name}</td>
               <td style={s.td}>{p.retailer_name}</td>
-              <td style={s.td}>₹{p.price}</td>
+              <td style={s.td}>{p.currency || '₹'}{parseFloat(p.price).toFixed(2)}</td>
               <td style={p.stock === 1 ? s.inStock : s.outStock}>
                 {p.stock === 1 ? '✅ Available' : '❌ Out of Stock'}
               </td>
@@ -175,7 +185,7 @@ const getStyles = (dark) => ({
   uploadBtn: { padding: '10px 20px', background: '#1890ff', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
   success: { color: '#52c41a', fontSize: '13px' },
   error: { color: '#ff4d4f', fontSize: '13px' },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' },
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' },
   stat: { background: dark ? '#1f1f1f' : 'white', padding: '24px', borderRadius: '10px', textAlign: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.08)' },
   statNum: { color: dark ? '#fff' : '#333', margin: '0 0 8px' },
   statLabel: { color: dark ? '#aaa' : '#888', margin: 0 },
@@ -191,7 +201,6 @@ const getStyles = (dark) => ({
   rStatNum: { fontSize: '20px', fontWeight: 'bold', color: dark ? '#fff' : '#333' },
   rStatLabel: { fontSize: '11px', color: dark ? '#aaa' : '#888' },
   viewProductsBtn: { width: '100%', marginTop: '16px', padding: '10px', background: 'linear-gradient(135deg, #1890ff, #096dd9)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' },
-  // New Arrivals
   newArrivalsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '16px', marginBottom: '32px' },
   arrivalCard: { background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer' },
   arrivalImage: { width: '100%', height: '150px', objectFit: 'cover' },
@@ -201,7 +210,6 @@ const getStyles = (dark) => ({
   arrivalFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   arrivalPrice: { color: '#52c41a', fontWeight: 'bold', fontSize: '14px' },
   arrivalRetailer: { color: '#1890ff', fontSize: '11px' },
-  // Table
   table: { width: '100%', borderCollapse: 'collapse', background: dark ? '#1f1f1f' : 'white', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', cursor: 'pointer' },
   th: { background: '#1890ff', color: 'white', padding: '12px 16px', textAlign: 'left' },
   tr: { borderBottom: `1px solid ${dark ? '#333' : '#f0f0f0'}`, background: dark ? '#1f1f1f' : 'white' },
