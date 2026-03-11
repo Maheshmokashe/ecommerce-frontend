@@ -7,9 +7,7 @@ const getQAReport  = (retailer) =>
 const validateFeed = (file) => {
   const form = new FormData();
   form.append('file', file);
-  return djangoApi.post('/qa/validate-feed/', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  return djangoApi.post('/qa/validate-feed/', form);
 };
 
 // ─── Score Badge ──────────────────────────────────────────
@@ -125,7 +123,8 @@ export default function QADashboard({ darkMode }) {
       const res = await validateFeed(target);
       setValidation(res.data);
     } catch (e) {
-      setValError(e.response?.data?.error || 'Failed to validate feed');
+      const msg = e.response?.data?.error || e.response?.data?.detail || e.message || 'Failed to validate feed';
+      setValError(msg);
     }
     setLoadingVal(false);
   };
