@@ -39,3 +39,5 @@ export const getDiscount = (price, salePrice) => {
   if (s >= p) return null;
   return Math.round(((p - s) / p) * 100);
 };
+
+export const getAnalytics = () => djangoApi.get('/analytics/');

@@ -8,6 +8,7 @@ import Search from './Search';
 import ActivityLog from './ActivityLog';
 import Categories from './Categories';
 import FeedScheduler from './FeedScheduler';
+import Analytics from './Analytics';
 
 function LoginWrapper() {
   const navigate = useNavigate();
@@ -25,12 +26,13 @@ function Layout({ darkMode, setDarkMode }) {
   };
 
   const navItems = [
-    { path: '/dashboard', label: '📊 Dashboard' },
-    { path: '/retailers', label: '🏪 Retailers' },
-    { path: '/categories', label: '🗂️ Categories' },
-    { path: '/products', label: '📦 Products' },
-    { path: '/search', label: '🔍 Search' },
-    { path: '/activity-log', label: '📋 Activity Log' },
+    { path: '/dashboard',      label: '📊 Dashboard' },
+    { path: '/retailers',      label: '🏪 Retailers' },
+    { path: '/categories',     label: '🗂️ Categories' },
+    { path: '/products',       label: '📦 Products' },
+    { path: '/search',         label: '🔍 Search' },
+    { path: '/analytics',      label: '📈 Analytics' },
+    { path: '/activity-log',   label: '📋 Activity Log' },
     { path: '/feed-scheduler', label: '⏰ Feed Scheduler' },
   ];
 
@@ -78,6 +80,7 @@ function Layout({ darkMode, setDarkMode }) {
           } />
           <Route path="/products" element={<Products darkMode={darkMode} />} />
           <Route path="/search" element={<Search darkMode={darkMode} />} />
+          <Route path="/analytics" element={<Analytics darkMode={darkMode} />} />
           <Route path="/activity-log" element={<ActivityLog darkMode={darkMode} />} />
           <Route path="/feed-scheduler" element={<FeedScheduler darkMode={darkMode} />} />
         </Routes>
