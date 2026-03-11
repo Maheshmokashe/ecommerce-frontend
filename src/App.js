@@ -9,6 +9,7 @@ import ActivityLog from './ActivityLog';
 import Categories from './Categories';
 import FeedScheduler from './FeedScheduler';
 import Analytics from './Analytics';
+import QADashboard from './QADashboard';
 
 function LoginWrapper() {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ function Layout({ darkMode, setDarkMode }) {
     { path: '/products',       label: '📦 Products' },
     { path: '/search',         label: '🔍 Search' },
     { path: '/analytics',      label: '📈 Analytics' },
+    { path: '/qa',             label: '🧪 QA Dashboard' },
     { path: '/activity-log',   label: '📋 Activity Log' },
     { path: '/feed-scheduler', label: '⏰ Feed Scheduler' },
   ];
@@ -81,6 +83,7 @@ function Layout({ darkMode, setDarkMode }) {
           <Route path="/products" element={<Products darkMode={darkMode} />} />
           <Route path="/search" element={<Search darkMode={darkMode} />} />
           <Route path="/analytics" element={<Analytics darkMode={darkMode} />} />
+          <Route path="/qa" element={<QADashboard darkMode={darkMode} />} />
           <Route path="/activity-log" element={<ActivityLog darkMode={darkMode} />} />
           <Route path="/feed-scheduler" element={<FeedScheduler darkMode={darkMode} />} />
         </Routes>
