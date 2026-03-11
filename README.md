@@ -1,6 +1,6 @@
 # 🛒 ECommerce Frontend
 
-A professional **React** dashboard for managing and browsing multi-retailer product catalogs. Built as the frontend for the [ECommerce Product API](https://github.com/Maheshmokashe/ecommerce-product-api).
+A professional **React JS** dashboard for managing and browsing multi-retailer product catalogs. Built as the frontend for the [ECommerce Product API](https://github.com/Maheshmokashe/ecommerce-product-api).
 
 ---
 
@@ -17,7 +17,8 @@ A professional **React** dashboard for managing and browsing multi-retailer prod
 | Framework | React 18 |
 | Routing | React Router DOM v6 |
 | HTTP Client | Axios |
-| Authentication | JWT (localStorage) |
+| Authentication | JWT (localStorage + Axios interceptor) |
+| Charts | Recharts |
 | Styling | Inline styles (no CSS framework) |
 | Search | FastAPI microservice integration |
 
@@ -27,47 +28,51 @@ A professional **React** dashboard for managing and browsing multi-retailer prod
 
 ### 📊 Dashboard
 - Total products, categories, retailers stats
-- Retailer-wise product counts, available counts, avg price with correct currency
-- New Arrivals section — 8 most recent products
-- Recent products table with clickable rows
+- Retailer-wise product counts, available counts, avg price with correct currency symbol
+- New Arrivals section — 8 most recently added products
 
 ### 🏪 Retailers Page
-- Retailer cards with website link
-- Per-retailer stats: products, available, avg price (currency-aware)
+- Retailer cards with website link, product count, avg price (currency-aware)
 - **Delete retailer** with confirmation modal — CASCADE deletes all products
 - View Products → navigates to filtered products page
 
 ### 🗂️ Categories Page
-- **Hierarchical tree** — Top → Mid → Sub → Leaf levels
-- Color-coded levels (blue/green/yellow/pink)
-- Expand/Collapse All controls
-- **Retailer filter dropdown** — see category tree per retailer
+- **Hierarchical tree** — Top → Mid → Sub → Leaf levels with recursive rendering
+- Color-coded level borders (blue / green / yellow / pink)
+- Expand / Collapse All controls
+- **Retailer filter dropdown** — category tree updates per selected retailer, empty categories auto-hidden
 - Search categories by name
 - Product count + availability bar per node
-- Click any category → filters products page
+- Click any category → navigates to filtered products page
 
 ### 📦 Products Page
-- Product grid with images, category badge, SKU, brand, colors
+- Product grid with images, category badge, SKU, brand, colors, sizes
 - **Sale price** with strikethrough original + discount % badge
-- Filters: Category, Brand, Min/Max Price, Sort
-- **Bulk Select mode** — select multiple products
+- Filters: Category, Brand, Min/Max Price, Sort — all client-side (instant)
+- **URL param filtering** — `/products?retailer=Westside IN&category=Western Wear`
+- **Bulk Select mode:**
+  - Select individual or all filtered products
   - Bulk Export CSV (selected products)
-  - Bulk Delete with confirmation
-  - Select All filtered (e.g. select all 11,558 at once)
-- **Compare Products** — side-by-side comparison up to 3 products
+  - Bulk Delete with confirmation modal
+- **Compare Products** — side-by-side comparison modal for up to 3 products
 - **Export CSV** — all filtered products with all fields
-- **Product Detail Modal** — image gallery (6 thumbnails), colors, sizes, description
-- Pagination (20 per page with smart page numbers)
-- URL param filtering: `/products?retailer=Westside IN&category=Western Wear`
+- **Product Detail Modal** — image gallery (up to 6 thumbnails), colors, sizes, description
+- Pagination — 20 per page with smart page number controls
 
 ### 🔍 Advanced Search Page
-- FastAPI-powered full-text search
+- FastAPI-powered full-text search (name, SKU, brand)
 - Collapsible filter panel: Retailer, Brand, Color, Size, Min/Max Price, In Stock Only
-- Active filter tags (each removable with ✕)
-- **Infinite scroll** — loads 20 at a time as you scroll
+- Active filter tags — each removable with ✕ click
+- **Infinite scroll** — loads 20 results at a time using IntersectionObserver
 - **Skeleton loading** — 8 card skeletons while fetching
-- Sale badges, retailer/brand tags on cards
-- Product Detail Modal
+- Sale badges and retailer/brand tags on product cards
+
+### 📈 Analytics Dashboard
+- **4 tabs** — Products, Price, Categories, Uploads
+- **Products tab:** stat cards (total, in-stock, out-of-stock, on-sale), bar chart by retailer, stock donut, top 10 brands horizontal bar, sale vs full-price donut, products uploaded over time line chart
+- **Price tab:** avg/min/max price per retailer grouped bar chart, price range distribution bar chart, price summary table
+- **Categories tab:** top 10 categories horizontal bar chart, availability % per category bar chart with color coding (green/yellow/red), availability details table with progress bars
+- **Uploads tab:** stat cards, uploads per retailer bar chart, success rate donut, loaded vs skipped summary bar
 
 ### 📋 Activity Log
 - All XML upload history in a table
@@ -78,10 +83,10 @@ A professional **React** dashboard for managing and browsing multi-retailer prod
 - Set XML feed URL per retailer
 - One-click **Refresh Feed Now** — fetches XML from URL and updates products
 - Shows last refreshed timestamp
-- ✅ Feed Set / ⚠️ No Feed status badge
+- ✅ Feed Set / ⚠️ No Feed status badge per retailer
 
 ### 🌙 Dark Mode
-- Full dark mode support on all 7 pages
+- Full dark mode support across all 8 pages
 - Toggle in sidebar, persists during session
 
 ---
@@ -90,17 +95,18 @@ A professional **React** dashboard for managing and browsing multi-retailer prod
 
 ```
 frontend/src/
-├── App.js              # Router, Layout, sidebar navigation
+├── App.js              # Router, Layout, sidebar navigation (8 routes)
+├── api.js              # Axios instances + JWT interceptor + all API functions
 ├── Login.js            # Two-column JWT login page
-├── Dashboard.js        # Stats, retailer cards, new arrivals
-├── Retailers.js        # Retailer cards with delete
-├── Categories.js       # Hierarchical tree with retailer filter
-├── Products.js         # Grid, filters, bulk actions, compare, modal
-├── Search.js           # FastAPI search, infinite scroll, filters
-├── ActivityLog.js      # Upload history table
+├── Dashboard.js        # Stats cards, retailer summary, new arrivals
+├── Retailers.js        # Retailer cards with delete confirmation
+├── Categories.js       # Recursive hierarchical tree with retailer filter
+├── Products.js         # Grid, filters, bulk actions, compare, modal, CSV export
+├── Search.js           # FastAPI search, infinite scroll, skeleton loading
+├── Analytics.js        # 4-tab analytics dashboard with Recharts charts
+├── ActivityLog.js      # Upload history table with stats
 ├── FeedScheduler.js    # Feed URL management per retailer
-├── api.js              # Axios instances + all API functions
-└── index.css           # Animations (spin, pulse)
+└── index.css           # Animations (spin, pulse for skeleton)
 ```
 
 ---
@@ -111,6 +117,7 @@ frontend/src/
 ```javascript
 export const djangoApi = axios.create({ baseURL: 'http://127.0.0.1:8000/api' });
 
+// JWT auto-attached to every request via interceptor
 login(data)                          // POST /token/
 getProducts()                        // GET /products/
 getCategories()                      // GET /categories/
@@ -121,13 +128,14 @@ getUploadLogs()                      // GET /upload-logs/
 getCategoryStats(retailer?)          // GET /category-stats/?retailer=
 updateFeedUrl(id, feed_url)          // POST /retailers/{id}/update-feed/
 refreshFeed(id)                      // POST /retailers/{id}/refresh-feed/
+getAnalytics()                       // GET /analytics/
 ```
 
 ### FastAPI Search Microservice (port 8001)
 ```javascript
 export const fastapiApi = axios.create({ baseURL: 'http://127.0.0.1:8001' });
 
-searchProductsAdvanced(params)       // GET /search?q=&retailer=&brand=...
+searchProductsAdvanced(params)       // GET /search?q=&retailer=&brand=&color=&size=...
 getSearchFilters()                   // GET /filters
 ```
 
@@ -149,6 +157,7 @@ cd ecommerce-frontend
 ### 2. Install dependencies
 ```bash
 npm install
+npm install recharts
 ```
 
 ### 3. Start the app
@@ -167,33 +176,38 @@ Use your Django superuser credentials:
 
 ## 🖥️ Pages Overview
 
-| Route | Page | Description |
+| Route | Page | Key Feature |
 |---|---|---|
 | `/` | Login | JWT authentication |
 | `/dashboard` | Dashboard | Stats + new arrivals |
-| `/retailers` | Retailers | Manage retailers |
-| `/categories` | Categories | Hierarchical tree |
-| `/products` | Products | Browse + bulk actions |
-| `/search` | Search | Advanced search |
-| `/activity-log` | Activity Log | Upload history |
-| `/feed-scheduler` | Feed Scheduler | Feed URL management |
+| `/retailers` | Retailers | Cards + delete modal |
+| `/categories` | Categories | Recursive expandable tree |
+| `/products` | Products | Grid + bulk actions + compare |
+| `/search` | Search | FastAPI + infinite scroll |
+| `/analytics` | Analytics | 4 tabs + 10 Recharts charts |
+| `/activity-log` | Activity Log | Upload history table |
+| `/feed-scheduler` | Feed Scheduler | Feed URL + one-click refresh |
 
 ---
 
 ## 💡 Key Technical Decisions
 
-- **No CSS framework** — all styling via inline JS objects for portability
-- **JWT interceptor** — auto-attaches Bearer token to all Django API requests
-- **URL param routing** — `/products?retailer=X&category=Y` enables direct linking
-- **IntersectionObserver** — powers infinite scroll on Search page
-- **Skeleton loading** — improves perceived performance on Search
-- **update_or_create** — Feed Scheduler refreshes without duplicating
+| Decision | Reason |
+|---|---|
+| Axios JWT interceptor | Token auto-attached — no manual header in any component |
+| Client-side filtering on Products | All products loaded once → instant filter/sort in memory |
+| URL params on Products page | `/products?retailer=X` enables direct linking from other pages |
+| IntersectionObserver for scroll | Native browser API for infinite scroll — no library needed |
+| Skeleton loading on Search | Better perceived performance while FastAPI responds |
+| Recursive renderNode in Categories | Handles unlimited depth tree without hardcoded levels |
+| Recharts for Analytics | Lightweight, React-native chart library with responsive containers |
+| No CSS framework | Inline JS style objects — fully portable, no build config needed |
 
 ---
 
 ## 📊 Data Stats
-- **real products** across multiple retailers
-- **hierarchical categories**
+- **11,500+ real products** across multiple international retailers
+- **150+ hierarchical categories**
 - **Multi-currency**: ₹, £, €, ₩, $ and 20+ more
 - Supports **unlimited retailers** — just upload a new XML feed
 
@@ -202,4 +216,5 @@ Use your Django superuser credentials:
 ## 👨‍💻 Author
 **Mahesh Mokashe**
 - GitHub: [@Maheshmokashe](https://github.com/Maheshmokashe)
-- Experience: 3.7 years at KrawlNet Technologies
+- LinkedIn: [linkedin.com/in/mahesh-mokashe1997](https://linkedin.com/in/mahesh-mokashe1997)
+- Experience: 3.8 years at KrawlNet Technologies
