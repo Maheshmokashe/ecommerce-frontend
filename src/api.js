@@ -1,12 +1,7 @@
 import axios from 'axios';
 
-export const djangoApi = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api',
-});
-
-export const fastapiApi = axios.create({
-  baseURL: 'http://127.0.0.1:8001',
-});
+export const djangoApi = axios.create({ baseURL: 'http://127.0.0.1:8000/api' });
+export const fastapiApi = axios.create({ baseURL: 'http://127.0.0.1:8001' });
 
 djangoApi.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
@@ -19,42 +14,28 @@ export const getProducts = () => djangoApi.get('/products/');
 export const getCategories = () => djangoApi.get('/categories/');
 export const getRetailers = () => djangoApi.get('/retailers/');
 export const deleteRetailer = (id) => djangoApi.delete(`/retailers/${id}/`);
-export const searchProducts = (q, min, max) =>
-  fastapiApi.get('/search', {
-    params: {
-      q,
-      min_price: min || undefined,
-      max_price: max || undefined,
-      limit: 500
-    }
-  });
+export const bulkDeleteProducts = (ids) => djangoApi.post('/bulk-delete/', { ids });
+export const getUploadLogs = () => djangoApi.get('/upload-logs/');
+export const updateFeedUrl = (id, feed_url) => djangoApi.post(`/retailers/${id}/update-feed/`, { feed_url });
+export const refreshFeed = (id) => djangoApi.post(`/retailers/${id}/refresh-feed/`);
+export const getCategoryStats = (retailer = null) =>
+  djangoApi.get('/category-stats/', { params: retailer ? { retailer } : {} });
 
-// Format price with correct currency symbol
+export const searchProductsAdvanced = (params) =>
+  fastapiApi.get('/search', { params: { ...params, limit: 500 } });
+export const getSearchFilters = () => fastapiApi.get('/filters');
+
 export const formatPrice = (price, currency = '₹') => {
   if (!price) return `${currency}0`;
   const num = parseFloat(price);
-  if (currency === '£' || currency === '$' || currency === '€') {
-    return `${currency}${num.toFixed(2)}`;
-  }
-  // Indian rupee formatting with commas (e.g. ₹1,386)
+  if (currency === '£' || currency === '$' || currency === '€') return `${currency}${num.toFixed(2)}`;
   return `${currency}${Math.round(num).toLocaleString('en-IN')}`;
 };
 
-// Calculate discount percentage between original and sale price
 export const getDiscount = (price, salePrice) => {
   if (!salePrice || !price) return null;
   const p = parseFloat(price);
   const s = parseFloat(salePrice);
-  if (s >= p || s <= 0) return null;
+  if (s >= p) return null;
   return Math.round(((p - s) / p) * 100);
 };
-
-export const searchProductsAdvanced = (params) =>
-  fastapiApi.get('/search', { params: { ...params, limit: 500 } });
-
-export const getSearchFilters = () => fastapiApi.get('/filters');
-export const getUploadLogs = () => djangoApi.get('/upload-logs/');
-export const bulkDeleteProducts = (ids) => djangoApi.post('/bulk-delete/', { ids });
-export const getCategoryStats = () => djangoApi.get('/category-stats/');
-export const updateFeedUrl = (id, feed_url) => djangoApi.post(`/retailers/${id}/update-feed/`, { feed_url });
-export const refreshFeed = (id) => djangoApi.post(`/retailers/${id}/refresh-feed/`);

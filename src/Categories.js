@@ -1,28 +1,49 @@
 import { useEffect, useState } from 'react';
-import { getCategoryStats } from './api';
+import { getCategoryStats, getRetailers } from './api';
 
 export default function Categories({ darkMode, onSelectCategory }) {
   const [tree, setTree] = useState([]);
+  const [filteredTree, setFilteredTree] = useState([]);
+  const [retailers, setRetailers] = useState([]);
+  const [selectedRetailer, setSelectedRetailer] = useState('All');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState({});
   const [loading, setLoading] = useState(true);
   const s = getStyles(darkMode);
 
   useEffect(() => {
-    getCategoryStats().then(res => {
-      setTree(res.data);
+    Promise.all([getCategoryStats(), getRetailers()]).then(([catRes, retRes]) => {
+      setTree(catRes.data);
+      setFilteredTree(catRes.data);
+      setRetailers(retRes.data);
       const exp = {};
-      res.data.forEach(c => { exp[c.id] = true; });
+      catRes.data.forEach(c => { exp[c.id] = true; });
       setExpanded(exp);
       setLoading(false);
     });
   }, []);
 
+  // When retailer changes, fetch filtered stats
+  useEffect(() => {
+    if (selectedRetailer === 'All') {
+      setFilteredTree(tree);
+      return;
+    }
+    setLoading(true);
+    getCategoryStats(selectedRetailer).then(res => {
+      setFilteredTree(res.data);
+      const exp = {};
+      res.data.forEach(c => { exp[c.id] = true; });
+      setExpanded(exp);
+      setLoading(false);
+    });
+  }, [selectedRetailer]);
+
   const toggleExpand = (id) => {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const totalProducts = tree.reduce((sum, c) => sum + c.total, 0);
+  const totalProducts = filteredTree.reduce((sum, c) => sum + c.total, 0);
 
   const totalCategories = (nodes) => {
     let count = nodes.length;
@@ -62,7 +83,7 @@ export default function Categories({ darkMode, onSelectCategory }) {
     }, []);
   };
 
-  const displayTree = search ? filterTree(tree, search) : tree;
+  const displayTree = search ? filterTree(filteredTree, search) : filteredTree;
 
   const renderNode = (node, depth = 0) => {
     const hasChildren = node.children && node.children.length > 0;
@@ -84,7 +105,6 @@ export default function Categories({ darkMode, onSelectCategory }) {
             depth === 2 ? '#faad14' : '#eb2f96'
           }`,
         }}>
-          {/* Left side */}
           <div style={s.nodeLeft}>
             {hasChildren ? (
               <button style={s.expandBtn} onClick={() => toggleExpand(node.id)}>
@@ -121,7 +141,6 @@ export default function Categories({ darkMode, onSelectCategory }) {
             </div>
           </div>
 
-          {/* Right side */}
           <div style={s.nodeRight}>
             <div style={s.statPill}>
               <span style={s.statPillNum}>{node.total.toLocaleString()}</span>
@@ -143,7 +162,6 @@ export default function Categories({ darkMode, onSelectCategory }) {
           </div>
         </div>
 
-        {/* Render children */}
         {hasChildren && isExpanded && (
           <div style={{ marginTop: '2px' }}>
             {node.children.map(child => renderNode(child, depth + 1))}
@@ -157,23 +175,26 @@ export default function Categories({ darkMode, onSelectCategory }) {
     <div style={s.container}>
       <h2 style={s.heading}>🗂️ Categories</h2>
       <p style={s.sub}>
-        Hierarchical category tree — {totalCategories(tree)} categories across {totalProducts.toLocaleString()} products
+        Hierarchical category tree — {totalCategories(filteredTree)} categories across {totalProducts.toLocaleString()} products
+        {selectedRetailer !== 'All' && (
+          <span style={s.retailerFilterTag}>🏪 {selectedRetailer}</span>
+        )}
       </p>
 
       {/* Summary Stats */}
       <div style={s.statsGrid}>
         <div style={s.stat}>
-          <h2 style={s.statNum}>{tree.length}</h2>
+          <h2 style={s.statNum}>{filteredTree.length}</h2>
           <p style={s.statLabel}>Top Level</p>
         </div>
         <div style={s.stat}>
           <h2 style={{ ...s.statNum, color: '#52c41a' }}>
-            {tree.reduce((sum, c) => sum + (c.children?.length || 0), 0)}
+            {filteredTree.reduce((sum, c) => sum + (c.children?.length || 0), 0)}
           </h2>
           <p style={s.statLabel}>Mid Level</p>
         </div>
         <div style={s.stat}>
-          <h2 style={{ ...s.statNum, color: '#faad14' }}>{totalCategories(tree)}</h2>
+          <h2 style={{ ...s.statNum, color: '#faad14' }}>{totalCategories(filteredTree)}</h2>
           <p style={s.statLabel}>Total Categories</p>
         </div>
         <div style={s.stat}>
@@ -182,8 +203,19 @@ export default function Categories({ darkMode, onSelectCategory }) {
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Retailer Filter + Search + Controls */}
       <div style={s.filterRow}>
+        {/* Retailer dropdown */}
+        <select
+          style={s.retailerSelect}
+          value={selectedRetailer}
+          onChange={e => setSelectedRetailer(e.target.value)}>
+          <option value="All">🏪 All Retailers</option>
+          {retailers.map(r => (
+            <option key={r.id} value={r.name}>🏪 {r.name}</option>
+          ))}
+        </select>
+
         <input
           style={s.searchInput}
           placeholder="🔍 Search categories..."
@@ -196,7 +228,7 @@ export default function Categories({ darkMode, onSelectCategory }) {
             all[n.id] = true;
             if (n.children) collectIds(n.children);
           });
-          collectIds(tree);
+          collectIds(filteredTree);
           setExpanded(all);
         }}>
           ▼ Expand All
@@ -208,9 +240,9 @@ export default function Categories({ darkMode, onSelectCategory }) {
 
       {/* Legend */}
       <div style={s.legend}>
-        <span style={{ ...s.legendItem, borderLeft: '3px solid #1890ff', color: '#1890ff' }}>🗂️ Top Level</span>
-        <span style={{ ...s.legendItem, borderLeft: '3px solid #52c41a', color: '#52c41a' }}>📁 Mid Level</span>
-        <span style={{ ...s.legendItem, borderLeft: '3px solid #faad14', color: '#faad14' }}>📄 Sub Level</span>
+        <span style={{ ...s.legendItem, borderLeft: '3px solid #1890ff', color: '#1890ff' }}>🗂️ Top</span>
+        <span style={{ ...s.legendItem, borderLeft: '3px solid #52c41a', color: '#52c41a' }}>📁 Mid</span>
+        <span style={{ ...s.legendItem, borderLeft: '3px solid #faad14', color: '#faad14' }}>📄 Sub</span>
         <span style={{ ...s.legendItem, borderLeft: '3px solid #eb2f96', color: '#eb2f96' }}>🔖 Leaf</span>
       </div>
 
@@ -220,7 +252,10 @@ export default function Categories({ darkMode, onSelectCategory }) {
         <div style={s.tree}>
           {displayTree.map(node => renderNode(node, 0))}
           {displayTree.length === 0 && (
-            <div style={s.empty}>No categories found for "{search}"</div>
+            <div style={s.empty}>
+              <p style={{ fontSize: '40px' }}>🗂️</p>
+              <p>No categories found{search ? ` for "${search}"` : ''}</p>
+            </div>
           )}
         </div>
       )}
@@ -231,12 +266,14 @@ export default function Categories({ darkMode, onSelectCategory }) {
 const getStyles = (dark) => ({
   container: { padding: '24px' },
   heading: { color: dark ? '#fff' : '#333', margin: '0 0 8px' },
-  sub: { color: dark ? '#aaa' : '#888', fontSize: '14px', marginBottom: '24px' },
+  sub: { color: dark ? '#aaa' : '#888', fontSize: '14px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' },
+  retailerFilterTag: { background: '#1890ff22', color: '#1890ff', padding: '2px 10px', borderRadius: '20px', fontSize: '13px', fontWeight: '500' },
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' },
   stat: { background: dark ? '#1f1f1f' : 'white', padding: '20px', borderRadius: '10px', textAlign: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.08)' },
   statNum: { color: dark ? '#fff' : '#333', margin: '0 0 8px', fontSize: '28px' },
   statLabel: { color: dark ? '#aaa' : '#888', margin: 0, fontSize: '13px' },
   filterRow: { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' },
+  retailerSelect: { padding: '10px 16px', borderRadius: '8px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333', cursor: 'pointer', minWidth: '200px' },
   searchInput: { flex: 1, minWidth: '200px', padding: '10px 16px', borderRadius: '8px', border: `1px solid ${dark ? '#444' : '#ddd'}`, fontSize: '14px', background: dark ? '#1f1f1f' : 'white', color: dark ? '#fff' : '#333' },
   expandAllBtn: { padding: '10px 16px', background: '#1890ff', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
   collapseAllBtn: { padding: '10px 16px', background: dark ? '#333' : '#f0f2f5', color: dark ? '#fff' : '#333', border: `1px solid ${dark ? '#444' : '#ddd'}`, borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
@@ -244,7 +281,7 @@ const getStyles = (dark) => ({
   legendItem: { padding: '4px 12px', background: dark ? '#2a2a2a' : '#f9f9f9', borderRadius: '4px', fontSize: '12px', paddingLeft: '10px' },
   loadingBox: { textAlign: 'center', padding: '60px', color: dark ? '#aaa' : '#888' },
   tree: { display: 'flex', flexDirection: 'column', gap: '4px' },
-  node: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderRadius: '8px', marginBottom: '3px', flexWrap: 'wrap', gap: '8px', transition: 'all 0.2s' },
+  node: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderRadius: '8px', marginBottom: '3px', flexWrap: 'wrap', gap: '8px' },
   nodeLeft: { display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '200px' },
   nodeRight: { display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' },
   expandBtn: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '10px', color: dark ? '#aaa' : '#888', padding: '2px 6px', minWidth: '22px', borderRadius: '4px' },
