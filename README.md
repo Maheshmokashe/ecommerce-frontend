@@ -1,70 +1,205 @@
-# Getting Started with Create React App
+# 🛒 ECommerce Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A professional **React** dashboard for managing and browsing multi-retailer product catalogs. Built as the frontend for the [ECommerce Product API](https://github.com/Maheshmokashe/ecommerce-product-api).
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## 🚀 Live Demo
+- **Frontend:** `http://localhost:3000`
+- **Backend API:** [ecommerce-product-api](https://github.com/Maheshmokashe/ecommerce-product-api)
 
-### `npm start`
+---
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## 🏗️ Tech Stack
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+| Layer | Technology |
+|---|---|
+| Framework | React 18 |
+| Routing | React Router DOM v6 |
+| HTTP Client | Axios |
+| Authentication | JWT (localStorage) |
+| Styling | Inline styles (no CSS framework) |
+| Search | FastAPI microservice integration |
 
-### `npm test`
+---
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## ✨ Features
 
-### `npm run build`
+### 📊 Dashboard
+- Total products, categories, retailers stats
+- Retailer-wise product counts, available counts, avg price with correct currency
+- New Arrivals section — 8 most recent products
+- Recent products table with clickable rows
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### 🏪 Retailers Page
+- Retailer cards with website link
+- Per-retailer stats: products, available, avg price (currency-aware)
+- **Delete retailer** with confirmation modal — CASCADE deletes all products
+- View Products → navigates to filtered products page
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 🗂️ Categories Page
+- **Hierarchical tree** — Top → Mid → Sub → Leaf levels
+- Color-coded levels (blue/green/yellow/pink)
+- Expand/Collapse All controls
+- **Retailer filter dropdown** — see category tree per retailer
+- Search categories by name
+- Product count + availability bar per node
+- Click any category → filters products page
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### 📦 Products Page
+- Product grid with images, category badge, SKU, brand, colors
+- **Sale price** with strikethrough original + discount % badge
+- Filters: Category, Brand, Min/Max Price, Sort
+- **Bulk Select mode** — select multiple products
+  - Bulk Export CSV (selected products)
+  - Bulk Delete with confirmation
+  - Select All filtered (e.g. select all 11,558 at once)
+- **Compare Products** — side-by-side comparison up to 3 products
+- **Export CSV** — all filtered products with all fields
+- **Product Detail Modal** — image gallery (6 thumbnails), colors, sizes, description
+- Pagination (20 per page with smart page numbers)
+- URL param filtering: `/products?retailer=Westside IN&category=Western Wear`
 
-### `npm run eject`
+### 🔍 Advanced Search Page
+- FastAPI-powered full-text search
+- Collapsible filter panel: Retailer, Brand, Color, Size, Min/Max Price, In Stock Only
+- Active filter tags (each removable with ✕)
+- **Infinite scroll** — loads 20 at a time as you scroll
+- **Skeleton loading** — 8 card skeletons while fetching
+- Sale badges, retailer/brand tags on cards
+- Product Detail Modal
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### 📋 Activity Log
+- All XML upload history in a table
+- Columns: retailer, filename, total found, loaded, skipped, success rate (progress bar), status, uploaded by, date/time
+- Summary stats: total uploads, products loaded, skipped, success/failed counts
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### ⏰ Feed Scheduler
+- Set XML feed URL per retailer
+- One-click **Refresh Feed Now** — fetches XML from URL and updates products
+- Shows last refreshed timestamp
+- ✅ Feed Set / ⚠️ No Feed status badge
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### 🌙 Dark Mode
+- Full dark mode support on all 7 pages
+- Toggle in sidebar, persists during session
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+---
 
-## Learn More
+## 📁 Project Structure
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```
+frontend/src/
+├── App.js              # Router, Layout, sidebar navigation
+├── Login.js            # Two-column JWT login page
+├── Dashboard.js        # Stats, retailer cards, new arrivals
+├── Retailers.js        # Retailer cards with delete
+├── Categories.js       # Hierarchical tree with retailer filter
+├── Products.js         # Grid, filters, bulk actions, compare, modal
+├── Search.js           # FastAPI search, infinite scroll, filters
+├── ActivityLog.js      # Upload history table
+├── FeedScheduler.js    # Feed URL management per retailer
+├── api.js              # Axios instances + all API functions
+└── index.css           # Animations (spin, pulse)
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+---
 
-### Code Splitting
+## 🔌 API Integration
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### Django REST API (port 8000)
+```javascript
+export const djangoApi = axios.create({ baseURL: 'http://127.0.0.1:8000/api' });
 
-### Analyzing the Bundle Size
+login(data)                          // POST /token/
+getProducts()                        // GET /products/
+getCategories()                      // GET /categories/
+getRetailers()                       // GET /retailers/
+deleteRetailer(id)                   // DELETE /retailers/{id}/
+bulkDeleteProducts(ids)              // POST /bulk-delete/
+getUploadLogs()                      // GET /upload-logs/
+getCategoryStats(retailer?)          // GET /category-stats/?retailer=
+updateFeedUrl(id, feed_url)          // POST /retailers/{id}/update-feed/
+refreshFeed(id)                      // POST /retailers/{id}/refresh-feed/
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+### FastAPI Search Microservice (port 8001)
+```javascript
+export const fastapiApi = axios.create({ baseURL: 'http://127.0.0.1:8001' });
 
-### Making a Progressive Web App
+searchProductsAdvanced(params)       // GET /search?q=&retailer=&brand=...
+getSearchFilters()                   // GET /filters
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+---
 
-### Advanced Configuration
+## ⚙️ Setup & Installation
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+### Prerequisites
+- Node.js 18+
+- Backend API running on port 8000
+- FastAPI running on port 8001
 
-### Deployment
+### 1. Clone the repo
+```bash
+git clone https://github.com/Maheshmokashe/ecommerce-frontend.git
+cd ecommerce-frontend
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+### 2. Install dependencies
+```bash
+npm install
+```
 
-### `npm run build` fails to minify
+### 3. Start the app
+```bash
+npm start
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+App runs at `http://localhost:3000`
+
+### 4. Login
+Use your Django superuser credentials:
+- Username: `admin`
+- Password: your password
+
+---
+
+## 🖥️ Pages Overview
+
+| Route | Page | Description |
+|---|---|---|
+| `/` | Login | JWT authentication |
+| `/dashboard` | Dashboard | Stats + new arrivals |
+| `/retailers` | Retailers | Manage retailers |
+| `/categories` | Categories | Hierarchical tree |
+| `/products` | Products | Browse + bulk actions |
+| `/search` | Search | Advanced search |
+| `/activity-log` | Activity Log | Upload history |
+| `/feed-scheduler` | Feed Scheduler | Feed URL management |
+
+---
+
+## 💡 Key Technical Decisions
+
+- **No CSS framework** — all styling via inline JS objects for portability
+- **JWT interceptor** — auto-attaches Bearer token to all Django API requests
+- **URL param routing** — `/products?retailer=X&category=Y` enables direct linking
+- **IntersectionObserver** — powers infinite scroll on Search page
+- **Skeleton loading** — improves perceived performance on Search
+- **update_or_create** — Feed Scheduler refreshes without duplicating
+
+---
+
+## 📊 Data Stats
+- **real products** across multiple retailers
+- **hierarchical categories**
+- **Multi-currency**: ₹, £, €, ₩, $ and 20+ more
+- Supports **unlimited retailers** — just upload a new XML feed
+
+---
+
+## 👨‍💻 Author
+**Mahesh Mokashe**
+- GitHub: [@Maheshmokashe](https://github.com/Maheshmokashe)
+- Experience: 3.7 years at KrawlNet Technologies
