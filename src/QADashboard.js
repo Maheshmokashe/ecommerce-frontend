@@ -123,13 +123,24 @@ const SuggestionCard = ({ item, dark }) => {
           </button>
           {open && (
             <table style={{ ...s.table, marginTop: 8 }}>
-              <thead><tr>{['SKU','Name','Retailer'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+              <thead><tr>{['SKU','Name','Retailer','Product URL'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
               <tbody>
                 {item.samples.map((p, i) => (
                   <tr key={i} style={i % 2 === 0 ? s.trEven : {}}>
                     <td style={s.td}><code style={{ fontSize: 11 }}>{p.sku}</code></td>
-                    <td style={s.td}>{p.name?.slice(0, 45)}…</td>
+                    <td style={s.td}>{p.name?.slice(0, 40)}{p.name?.length > 40 ? '…' : ''}</td>
                     <td style={s.td}>{p.retailer__name}</td>
+                    <td style={s.td}>
+                      {p.source_url ? (
+                        <a href={p.source_url} target="_blank" rel="noreferrer"
+                          style={{ color: '#1890ff', fontSize: 12, textDecoration: 'none' }}
+                          title={p.source_url}>
+                          🔗 View Product
+                        </a>
+                      ) : (
+                        <span style={{ color: '#aaa', fontSize: 12 }}>—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
