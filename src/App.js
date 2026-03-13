@@ -10,6 +10,7 @@ import Categories from './Categories';
 import FeedScheduler from './FeedScheduler';
 import Analytics from './Analytics';
 import QADashboard from './QADashboard';
+import ScrapeHealth from './ScrapeHealth';
 
 function LoginWrapper() {
   const navigate = useNavigate();
@@ -36,6 +37,7 @@ function Layout({ darkMode, setDarkMode }) {
     { path: '/qa',             label: '🧪 QA Dashboard' },
     { path: '/activity-log',   label: '📋 Activity Log' },
     { path: '/feed-scheduler', label: '⏰ Feed Scheduler' },
+    { path: '/scrape-health',  label: '📊 Scrape Health' },
   ];
 
   return (
@@ -86,6 +88,7 @@ function Layout({ darkMode, setDarkMode }) {
           <Route path="/qa" element={<QADashboard darkMode={darkMode} />} />
           <Route path="/activity-log" element={<ActivityLog darkMode={darkMode} />} />
           <Route path="/feed-scheduler" element={<FeedScheduler darkMode={darkMode} />} />
+          <Route path="/scrape-health"  element={<ScrapeHealth  darkMode={darkMode} />} />
         </Routes>
       </div>
     </div>
