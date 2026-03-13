@@ -7,6 +7,7 @@ const getFixSuggestions   = (r) => djangoApi.get('/qa/fix-suggestions/',    { pa
 const getAdvancedRules    = (r) => djangoApi.get('/qa/advanced-rules/',     { params: r ? { retailer: r } : {} });
 const getRetailerComp     = ()  => djangoApi.get('/qa/retailer-comparison/');
 const getRetailersList    = ()  => djangoApi.get('/retailers/');
+const getPriceChanges     = (p) => djangoApi.get('/qa/price-changes/', { params: p });
 const getUploadFlags      = ()  => djangoApi.get('/qa/upload-flags/');
 const validateFeed        = (file) => {
   const form = new FormData();
@@ -193,6 +194,8 @@ export default function QADashboard({ darkMode }) {
   const [comparison,   setComparison]   = useState(null);
   const [uploadFlags,  setUploadFlags]  = useState(null);
   const [validation,   setValidation]   = useState(null);
+  const [priceChanges, setPriceChanges] = useState(null);
+  const [priceFilter,  setPriceFilter]  = useState({ days: 30, change_type: '', page: 1 });
 
   // Loading/error states
   const [loading, setLoading] = useState({});
@@ -247,6 +250,15 @@ export default function QADashboard({ darkMode }) {
     setLoad('uploadFlags', false);
   };
 
+  const fetchPriceChanges = async (overrides = {}) => {
+    const params = { ...priceFilter, ...overrides };
+    if (retailer) params.retailer = retailer;
+    setLoad('prices', true); setErr('prices', ''); setPriceChanges(null);
+    try { const r = await getPriceChanges(params); setPriceChanges(r.data); }
+    catch (e) { setErr('prices', e.response?.data?.error || 'Failed to load price changes'); }
+    setLoad('prices', false);
+  };
+
   const runValidation = async (f) => {
     const target = f || file;
     if (!target) return;
@@ -263,12 +275,13 @@ export default function QADashboard({ darkMode }) {
   };
 
   const tabs = [
-    { key: 'quality',    label: '🔍 Data Quality'     },
-    { key: 'fixes',      label: '💡 Fix Suggestions'   },
-    { key: 'advanced',   label: '🔬 Advanced Rules'    },
+    { key: 'quality',    label: '🔍 Data Quality'      },
+    { key: 'fixes',      label: '💡 Fix Suggestions'    },
+    { key: 'advanced',   label: '🔬 Advanced Rules'     },
     { key: 'comparison', label: '📊 Retailer Comparison'},
-    { key: 'flags',      label: '🚨 Upload Flags'      },
-    { key: 'validator',  label: '📋 Feed Validator'    },
+    { key: 'flags',      label: '🚨 Upload Flags'       },
+    { key: 'prices',     label: '📈 Price Changes'      },
+    { key: 'validator',  label: '📋 Feed Validator'     },
   ];
 
   return (
@@ -812,6 +825,211 @@ export default function QADashboard({ darkMode }) {
           )}
         </div>
       )}
+
+      {/* ══════════════════════════════════════
+          TAB 7 — PRICE CHANGE TRACKER
+      ══════════════════════════════════════ */}
+      {activeTab === 'prices' && (
+        <div>
+          {/* Filters row */}
+          <div style={s.card}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+
+              <div>
+                <label style={s.label}>Retailer</label>
+                <select style={{ ...s.input, width: 220, cursor: 'pointer' }} value={retailer} onChange={e => setRetailer(e.target.value)}>
+                  <option value="">— All Retailers —</option>
+                  {retailers.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={s.label}>Change Type</label>
+                <select style={{ ...s.input, width: 200, cursor: 'pointer' }}
+                  value={priceFilter.change_type}
+                  onChange={e => setPriceFilter(p => ({ ...p, change_type: e.target.value, page: 1 }))}>
+                  <option value="">— All Changes —</option>
+                  <option value="price_up">📈 Price Increased</option>
+                  <option value="price_down">📉 Price Decreased</option>
+                  <option value="sale_added">🏷️ Sale Added</option>
+                  <option value="sale_removed">❌ Sale Removed</option>
+                  <option value="sale_changed">🔄 Sale Changed</option>
+                  <option value="new_product">🆕 New Product</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={s.label}>Time Period</label>
+                <select style={{ ...s.input, width: 160, cursor: 'pointer' }}
+                  value={priceFilter.days}
+                  onChange={e => setPriceFilter(p => ({ ...p, days: Number(e.target.value), page: 1 }))}>
+                  <option value={7}>Last 7 days</option>
+                  <option value={30}>Last 30 days</option>
+                  <option value={90}>Last 90 days</option>
+                  <option value={365}>Last 1 year</option>
+                </select>
+              </div>
+
+              <button style={s.btn} onClick={() => fetchPriceChanges({ page: 1 })} disabled={loading.prices}>
+                {loading.prices ? '⏳ Loading...' : '📈 Load Price Changes'}
+              </button>
+            </div>
+          </div>
+
+          {errors.prices && <div style={s.errorBox}>❌ {errors.prices}</div>}
+
+          {!priceChanges && !loading.prices && (
+            <div style={{ ...s.card, textAlign: 'center', color: darkMode ? '#aaa' : '#888', padding: 40 }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>📈</div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Price Change Tracker</div>
+              <div style={{ fontSize: 13 }}>Tracks every price change detected during feed refreshes.<br />Click "Load Price Changes" to see the history.</div>
+            </div>
+          )}
+
+          {priceChanges && (
+            <>
+              {/* Summary cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 }}>
+                {[
+                  { label: 'Total Changes',   value: priceChanges.summary.total,        color: '#1890ff' },
+                  { label: '📈 Price Up',      value: priceChanges.summary.price_ups,    color: '#ff4d4f' },
+                  { label: '📉 Price Down',    value: priceChanges.summary.price_downs,  color: '#52c41a' },
+                  { label: '🏷️ Sale Added',   value: priceChanges.summary.sale_added,   color: '#faad14' },
+                  { label: '❌ Sale Removed',  value: priceChanges.summary.sale_removed, color: '#d46b08' },
+                  { label: '🆕 New Products',  value: priceChanges.summary.new_products, color: '#722ed1' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} style={s.statCard}>
+                    <div style={{ ...s.statNum, color }}>{value.toLocaleString()}</div>
+                    <div style={s.statLabel}>{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Biggest increases & decreases */}
+              {(priceChanges.biggest_increases.length > 0 || priceChanges.biggest_decreases.length > 0) && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+
+                  <div style={s.card}>
+                    <h4 style={{ ...s.sectionTitle, color: '#ff4d4f' }}>🔺 Biggest Price Increases</h4>
+                    {priceChanges.biggest_increases.length === 0
+                      ? <div style={{ color: darkMode ? '#666' : '#ccc', fontSize: 13 }}>None in this period</div>
+                      : priceChanges.biggest_increases.map((r, i) => (
+                        <div key={i} style={{ padding: '10px 0', borderBottom: `1px solid ${darkMode ? '#2a2a2a' : '#f0f0f0'}` }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <code style={{ fontSize: 11, color: '#1890ff' }}>{r.sku}</code>
+                              <div style={{ fontSize: 12, color: darkMode ? '#ccc' : '#555', marginTop: 2 }}>{r.product_name?.slice(0, 40)}</div>
+                              <div style={{ fontSize: 11, color: darkMode ? '#888' : '#aaa' }}>{r.retailer_name}</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#ff4d4f', fontWeight: 700, fontSize: 15 }}>+{r.change_pct}%</div>
+                              <div style={{ fontSize: 12, color: darkMode ? '#aaa' : '#888' }}>{r.currency}{r.old_price} → {r.currency}{r.new_price}</div>
+                              {r.source_url && <a href={r.source_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1890ff' }}>🔗 View</a>}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    }
+                  </div>
+
+                  <div style={s.card}>
+                    <h4 style={{ ...s.sectionTitle, color: '#52c41a' }}>🔻 Biggest Price Drops</h4>
+                    {priceChanges.biggest_decreases.length === 0
+                      ? <div style={{ color: darkMode ? '#666' : '#ccc', fontSize: 13 }}>None in this period</div>
+                      : priceChanges.biggest_decreases.map((r, i) => (
+                        <div key={i} style={{ padding: '10px 0', borderBottom: `1px solid ${darkMode ? '#2a2a2a' : '#f0f0f0'}` }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <code style={{ fontSize: 11, color: '#1890ff' }}>{r.sku}</code>
+                              <div style={{ fontSize: 12, color: darkMode ? '#ccc' : '#555', marginTop: 2 }}>{r.product_name?.slice(0, 40)}</div>
+                              <div style={{ fontSize: 11, color: darkMode ? '#888' : '#aaa' }}>{r.retailer_name}</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#52c41a', fontWeight: 700, fontSize: 15 }}>{r.change_pct}%</div>
+                              <div style={{ fontSize: 12, color: darkMode ? '#aaa' : '#888' }}>{r.currency}{r.old_price} → {r.currency}{r.new_price}</div>
+                              {r.source_url && <a href={r.source_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1890ff' }}>🔗 View</a>}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    }
+                  </div>
+                </div>
+              )}
+
+              {/* Full records table */}
+              <div style={s.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <h4 style={{ ...s.sectionTitle, margin: 0 }}>All Changes ({priceChanges.total_records.toLocaleString()} total)</h4>
+                  <span style={{ fontSize: 12, color: darkMode ? '#888' : '#aaa' }}>Page {priceChanges.page} of {priceChanges.total_pages}</span>
+                </div>
+
+                {priceChanges.records.length === 0
+                  ? <div style={{ textAlign: 'center', padding: 30, color: darkMode ? '#666' : '#bbb' }}>No price changes found for this period.</div>
+                  : <>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={s.table}>
+                        <thead>
+                          <tr>
+                            {['SKU','Product','Retailer','Change','Old Price','New Price','± %','Date','Link'].map(h => (
+                              <th key={h} style={s.th}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {priceChanges.records.map((r, i) => {
+                            const typeMap = {
+                              price_up:     { label: '📈 Up',          color: '#ff4d4f' },
+                              price_down:   { label: '📉 Down',        color: '#52c41a' },
+                              sale_added:   { label: '🏷️ Sale Added',  color: '#faad14' },
+                              sale_removed: { label: '❌ Sale Removed', color: '#d46b08' },
+                              sale_changed: { label: '🔄 Sale Changed', color: '#1890ff' },
+                              new_product:  { label: '🆕 New',          color: '#722ed1' },
+                            };
+                            const t = typeMap[r.change_type] || { label: r.change_type, color: '#666' };
+                            return (
+                              <tr key={i} style={i % 2 === 0 ? s.trEven : {}}>
+                                <td style={s.td}><code style={{ fontSize: 11 }}>{r.sku}</code></td>
+                                <td style={s.td}>{r.product_name?.slice(0,35)}{r.product_name?.length > 35 ? '…' : ''}</td>
+                                <td style={s.td}>{r.retailer_name}</td>
+                                <td style={s.td}><span style={{ color: t.color, fontWeight: 600, fontSize: 12 }}>{t.label}</span></td>
+                                <td style={s.td}>{r.old_price ? `${r.currency}${r.old_price}` : '—'}</td>
+                                <td style={s.td}>{r.currency}{r.new_price}</td>
+                                <td style={{ ...s.td, color: r.change_pct > 0 ? '#ff4d4f' : r.change_pct < 0 ? '#52c41a' : '#888', fontWeight: 600 }}>
+                                  {r.change_pct != null ? `${r.change_pct > 0 ? '+' : ''}${r.change_pct}%` : '—'}
+                                </td>
+                                <td style={{ ...s.td, fontSize: 12, color: darkMode ? '#888' : '#aaa' }}>{r.detected_at?.slice(0,10)}</td>
+                                <td style={s.td}>
+                                  {r.source_url
+                                    ? <a href={r.source_url} target="_blank" rel="noreferrer" style={{ color: '#1890ff', fontSize: 12 }}>🔗 View</a>
+                                    : <span style={{ color: '#ccc' }}>—</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {priceChanges.total_pages > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+                        <button style={s.btnGhost} disabled={priceChanges.page <= 1}
+                          onClick={() => fetchPriceChanges({ page: priceChanges.page - 1 })}>← Prev</button>
+                        <span style={{ padding: '9px 16px', color: darkMode ? '#aaa' : '#666', fontSize: 14 }}>
+                          {priceChanges.page} / {priceChanges.total_pages}
+                        </span>
+                        <button style={s.btnGhost} disabled={priceChanges.page >= priceChanges.total_pages}
+                          onClick={() => fetchPriceChanges({ page: priceChanges.page + 1 })}>Next →</button>
+                      </div>
+                    )}
+                  </>
+                }
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
