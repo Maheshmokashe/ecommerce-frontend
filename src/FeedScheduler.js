@@ -1,238 +1,439 @@
-import { useEffect, useState } from 'react';
-import { getRetailers, updateFeedUrl, refreshFeed } from './api';
+import { useState, useEffect, useRef } from 'react';
+import { djangoApi } from './api';
 
 export default function FeedScheduler({ darkMode }) {
-  const [retailers, setRetailers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [feedUrls, setFeedUrls] = useState({});
-  const [editingId, setEditingId] = useState(null);
-  const [refreshing, setRefreshing] = useState({});
-  const [results, setResults] = useState({});
-  const s = getStyles(darkMode);
+  const dark = darkMode;
+  const s = getStyles(dark);
 
+  const [retailers,    setRetailers]    = useState([]);
+  const [loading,      setLoading]      = useState(true);
+
+  // per-retailer state maps  { retailerId: value }
+  const [urlInputs,    setUrlInputs]    = useState({});   // text input values
+  const [editingId,    setEditingId]    = useState(null); // which card is in "set URL" mode
+  const [saving,       setSaving]       = useState({});   // saving URL
+  const [refreshing,   setRefreshing]   = useState({});   // refreshing feed
+  const [uploading,    setUploading]    = useState({});   // uploading XML file
+  const [results,      setResults]      = useState({});   // success/error messages
+
+  // hidden file input refs per retailer
+  const fileRefs = useRef({});
+
+  // ── Load all retailers ──────────────────────────────────────────
   useEffect(() => {
-    getRetailers().then(res => {
-      setRetailers(res.data);
-      const urls = {};
-      res.data.forEach(r => { urls[r.id] = r.feed_url || ''; });
-      setFeedUrls(urls);
-      setLoading(false);
-    });
+    djangoApi.get('/retailers/')
+      .then(r => {
+        setRetailers(r.data);
+        const init = {};
+        r.data.forEach(rt => { init[rt.id] = rt.feed_url || ''; });
+        setUrlInputs(init);
+      })
+      .catch(() => setResults(p => ({ ...p, global: 'Failed to load retailers' })))
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleSaveFeedUrl = async (retailer) => {
+  // ── Set Feed URL ────────────────────────────────────────────────
+  const saveUrl = async (retailer) => {
+    const url = urlInputs[retailer.id] || '';
+    setSaving(p => ({ ...p, [retailer.id]: true }));
+    setResults(p => ({ ...p, [retailer.id]: null }));
     try {
-      await updateFeedUrl(retailer.id, feedUrls[retailer.id]);
+      await djangoApi.post(`/retailers/${retailer.id}/update-feed/`, { feed_url: url });
+      setRetailers(prev => prev.map(r =>
+        r.id === retailer.id ? { ...r, feed_url: url } : r
+      ));
       setEditingId(null);
-      setResults(prev => ({ ...prev, [retailer.id]: { type: 'success', msg: '✅ Feed URL saved!' } }));
-      setTimeout(() => setResults(prev => ({ ...prev, [retailer.id]: null })), 3000);
-    } catch {
-      setResults(prev => ({ ...prev, [retailer.id]: { type: 'error', msg: '❌ Failed to save URL' } }));
+      setResults(p => ({ ...p, [retailer.id]: { type: 'success', msg: '✅ Feed URL saved!' } }));
+    } catch (e) {
+      setResults(p => ({ ...p, [retailer.id]: { type: 'error', msg: '❌ Failed to save URL' } }));
     }
+    setSaving(p => ({ ...p, [retailer.id]: false }));
   };
 
-  const handleRefresh = async (retailer) => {
-    if (!feedUrls[retailer.id]) {
-      setResults(prev => ({ ...prev, [retailer.id]: { type: 'error', msg: '❌ Set a feed URL first!' } }));
-      setTimeout(() => setResults(prev => ({ ...prev, [retailer.id]: null })), 3000);
+  // ── Refresh Feed from URL ───────────────────────────────────────
+  const refreshFeed = async (retailer) => {
+    if (!retailer.feed_url) {
+      setResults(p => ({ ...p, [retailer.id]: { type: 'error', msg: '❌ No feed URL set' } }));
       return;
     }
-    setRefreshing(prev => ({ ...prev, [retailer.id]: true }));
-    setResults(prev => ({ ...prev, [retailer.id]: { type: 'loading', msg: '⏳ Fetching feed...' } }));
+    setRefreshing(p => ({ ...p, [retailer.id]: true }));
+    setResults(p => ({ ...p, [retailer.id]: null }));
     try {
-      const res = await refreshFeed(retailer.id);
-      const d = res.data;
-      setResults(prev => ({
-        ...prev,
+      const r = await djangoApi.post(`/retailers/${retailer.id}/refresh-feed/`);
+      const d = r.data;
+      setRetailers(prev => prev.map(rt =>
+        rt.id === retailer.id
+          ? { ...rt, last_fetched_at: d.last_fetched_at || new Date().toISOString() }
+          : rt
+      ));
+      setResults(p => ({
+        ...p,
         [retailer.id]: {
           type: 'success',
-          msg: `✅ Done! Loaded: ${d.loaded} | Skipped: ${d.skipped} | Total: ${d.total_found}`
-        }
+          msg: `✅ Done! Loaded: ${d.loaded} | Skipped: ${d.skipped} | Total: ${d.total_found}`,
+        },
       }));
-      // update last_fetched_at in UI
-      setRetailers(prev => prev.map(r =>
-        r.id === retailer.id ? { ...r, last_fetched_at: d.last_fetched_at } : r
-      ));
-    } catch (err) {
-      const errMsg = err.response?.data?.error || 'Failed to refresh feed';
-      setResults(prev => ({ ...prev, [retailer.id]: { type: 'error', msg: `❌ ${errMsg}` } }));
-    } finally {
-      setRefreshing(prev => ({ ...prev, [retailer.id]: false }));
+    } catch (e) {
+      const msg = e.response?.data?.error || e.response?.data?.detail || 'Failed to refresh feed';
+      setResults(p => ({ ...p, [retailer.id]: { type: 'error', msg: `❌ ${msg}` } }));
     }
+    setRefreshing(p => ({ ...p, [retailer.id]: false }));
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'Never';
-    return new Date(dateStr).toLocaleString('en-IN', {
+  // ── Upload XML file directly for this retailer ──────────────────
+  const handleFileSelect = async (retailer, file) => {
+    if (!file) return;
+    setUploading(p => ({ ...p, [retailer.id]: true }));
+    setResults(p => ({ ...p, [retailer.id]: { type: 'info', msg: `⏳ Uploading ${file.name}...` } }));
+
+    const form = new FormData();
+    form.append('file', file);
+
+    try {
+      const r = await djangoApi.post('/upload-xml/', form);
+      const d = r.data;
+      // update last_fetched_at timestamp on the card
+      setRetailers(prev => prev.map(rt =>
+        rt.id === retailer.id
+          ? { ...rt, last_fetched_at: new Date().toISOString() }
+          : rt
+      ));
+      setResults(p => ({
+        ...p,
+        [retailer.id]: {
+          type: 'success',
+          msg: `✅ Uploaded! Loaded: ${d.loaded} | Skipped: ${d.skipped} | Total: ${d.total_found}`,
+        },
+      }));
+    } catch (e) {
+      const msg = e.response?.data?.error || e.response?.data?.detail || 'Upload failed';
+      setResults(p => ({ ...p, [retailer.id]: { type: 'error', msg: `❌ ${msg}` } }));
+    }
+
+    // reset the file input so the same file can be re-selected
+    if (fileRefs.current[retailer.id]) fileRefs.current[retailer.id].value = '';
+    setUploading(p => ({ ...p, [retailer.id]: false }));
+  };
+
+  // ── Helpers ─────────────────────────────────────────────────────
+  const fmtDate = (iso) => {
+    if (!iso) return 'Never';
+    return new Date(iso).toLocaleString('en-IN', {
       day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
+      hour: '2-digit', minute: '2-digit',
     });
   };
 
-  const totalWithFeed = retailers.filter(r => r.feed_url).length;
+  const hasFeed = (rt) => rt.feed_url && rt.feed_url.trim() !== '';
+
+  // ── Render ──────────────────────────────────────────────────────
+  if (loading) return (
+    <div style={s.page}>
+      <div style={s.loadBox}>⏳ Loading retailers...</div>
+    </div>
+  );
 
   return (
-    <div style={s.container}>
-      <h2 style={s.heading}>⏰ Feed Scheduler</h2>
-      <p style={s.sub}>Manage XML feed URLs and refresh product data per retailer</p>
+    <div style={s.page}>
+      <h2 style={s.heading}>📅 Feed Scheduler</h2>
+      <p style={s.sub}>
+        Manage XML feed URLs and upload product data for each retailer.
+        Set a URL to refresh automatically, or upload a file directly.
+      </p>
 
-      {/* Summary */}
-      <div style={s.statsGrid}>
-        <div style={s.stat}>
-          <h2 style={s.statNum}>{retailers.length}</h2>
-          <p style={s.statLabel}>Total Retailers</p>
-        </div>
-        <div style={s.stat}>
-          <h2 style={{ ...s.statNum, color: '#52c41a' }}>{totalWithFeed}</h2>
-          <p style={s.statLabel}>Feeds Configured</p>
-        </div>
-        <div style={s.stat}>
-          <h2 style={{ ...s.statNum, color: '#faad14' }}>{retailers.length - totalWithFeed}</h2>
-          <p style={s.statLabel}>No Feed URL</p>
-        </div>
-      </div>
+      {results.global && (
+        <div style={s.errorBox}>{results.global}</div>
+      )}
 
-      {/* Info banner */}
-      <div style={s.infoBanner}>
-        <span style={{ fontSize: '20px' }}>💡</span>
-        <span style={s.infoText}>
-          Set a direct XML feed URL for each retailer. Click <strong>🔄 Refresh</strong> to
-          re-fetch and update all products automatically using <strong>update_or_create</strong> — existing
-          products update, new ones get added, nothing gets duplicated.
-        </span>
-      </div>
+      <div style={s.grid}>
+        {retailers.map(rt => {
+          const res        = results[rt.id];
+          const isEditing  = editingId === rt.id;
+          const isSaving   = saving[rt.id];
+          const isRefresh  = refreshing[rt.id];
+          const isUpload   = uploading[rt.id];
+          const busy       = isSaving || isRefresh || isUpload;
 
-      {loading ? (
-        <div style={s.loadingBox}>⏳ Loading retailers...</div>
-      ) : (
-        <div style={s.cards}>
-          {retailers.map(retailer => {
-            const result = results[retailer.id];
-            const isRefreshing = refreshing[retailer.id];
-            const hasFeed = !!feedUrls[retailer.id];
-            const isEditing = editingId === retailer.id;
-
-            return (
-              <div key={retailer.id} style={s.card}>
-                {/* Card Header */}
-                <div style={s.cardHeader}>
-                  <div style={s.retailerInfo}>
-                    <span style={s.retailerIcon}>🏪</span>
-                    <div>
-                      <h3 style={s.retailerName}>{retailer.name}</h3>
-                      {retailer.website && (
-                        <a href={retailer.website} target="_blank" rel="noreferrer" style={s.website}>
-                          🌐 {retailer.website}
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                  <span style={hasFeed ? s.activeBadge : s.noBadge}>
-                    {hasFeed ? '✅ Feed Set' : '⚠️ No Feed'}
-                  </span>
-                </div>
-
-                {/* Last Fetched */}
-                <div style={s.lastFetched}>
-                  <span style={s.lastFetchedLabel}>🕐 Last refreshed:</span>
-                  <span style={s.lastFetchedVal}>{formatDate(retailer.last_fetched_at)}</span>
-                </div>
-
-                {/* Feed URL input */}
-                <div style={s.urlRow}>
-                  {isEditing ? (
-                    <>
-                      <input
-                        style={s.urlInput}
-                        value={feedUrls[retailer.id] || ''}
-                        onChange={e => setFeedUrls(prev => ({ ...prev, [retailer.id]: e.target.value }))}
-                        placeholder="https://example.com/feed.xml"
-                        autoFocus
-                      />
-                      <button style={s.saveBtn} onClick={() => handleSaveFeedUrl(retailer)}>
-                        💾 Save
-                      </button>
-                      <button style={s.cancelBtn} onClick={() => setEditingId(null)}>
-                        ✕
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div style={s.urlDisplay}>
-                        {feedUrls[retailer.id]
-                          ? <span style={s.urlText}>🔗 {feedUrls[retailer.id]}</span>
-                          : <span style={s.urlEmpty}>No feed URL set</span>
-                        }
-                      </div>
-                      <button style={s.editBtn} onClick={() => setEditingId(retailer.id)}>
-                        ✏️ {hasFeed ? 'Edit' : 'Set URL'}
-                      </button>
-                    </>
+          return (
+            <div key={rt.id} style={s.card}>
+              {/* ── Card header ── */}
+              <div style={s.cardHeader}>
+                <span style={s.storeName}>🏪</span>
+                <div>
+                  <div style={s.retailerName}>{rt.name}</div>
+                  {rt.website && (
+                    <a href={rt.website} target="_blank" rel="noreferrer" style={s.website}>
+                      🌐 {rt.website}
+                    </a>
                   )}
                 </div>
+              </div>
 
-                {/* Result message */}
-                {result && (
-                  <div style={result.type === 'success' ? s.successMsg :
-                              result.type === 'error' ? s.errorMsg : s.loadingMsg}>
-                    {result.msg}
+              {/* ── Feed status badge ── */}
+              <div style={s.statusRow}>
+                {hasFeed(rt)
+                  ? <span style={{ ...s.badge, background: '#e6f4ff', color: '#0958d9', border: '1px solid #91caff' }}>✅ Feed Set</span>
+                  : <span style={{ ...s.badge, background: '#fff7e6', color: '#d46b08', border: '1px solid #ffd591' }}>⚠️ No Feed</span>
+                }
+                <span style={s.lastFetched}>🕐 Last refreshed: {fmtDate(rt.last_fetched_at)}</span>
+              </div>
+
+              {/* ── Current feed URL ── */}
+              {hasFeed(rt) && !isEditing && (
+                <div style={s.feedUrlBox}>
+                  <span style={s.feedUrlLabel}>Feed URL:</span>
+                  <span style={s.feedUrlText}>{rt.feed_url}</span>
+                </div>
+              )}
+              {!hasFeed(rt) && !isEditing && (
+                <div style={s.noFeedMsg}>No feed URL set</div>
+              )}
+
+              {/* ── Set URL input (shown when editing) ── */}
+              {isEditing && (
+                <div style={{ marginBottom: 12 }}>
+                  <input
+                    style={s.input}
+                    placeholder="https://example.com/feed.xml"
+                    value={urlInputs[rt.id] || ''}
+                    onChange={e => setUrlInputs(p => ({ ...p, [rt.id]: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && saveUrl(rt)}
+                    autoFocus
+                  />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button style={s.btnPrimary} onClick={() => saveUrl(rt)} disabled={isSaving}>
+                      {isSaving ? '⏳ Saving...' : '💾 Save URL'}
+                    </button>
+                    <button style={s.btnGhost} onClick={() => setEditingId(null)}>Cancel</button>
                   </div>
+                </div>
+              )}
+
+              {/* ── Result message ── */}
+              {res && (
+                <div style={{
+                  ...s.resultMsg,
+                  background: res.type === 'success' ? (dark ? '#162312' : '#f6ffed')
+                            : res.type === 'error'   ? (dark ? '#2a1215' : '#fff2f0')
+                            : (dark ? '#111a2c' : '#e6f4ff'),
+                  color:      res.type === 'success' ? '#52c41a'
+                            : res.type === 'error'   ? '#ff4d4f'
+                            : '#1890ff',
+                  border:     `1px solid ${
+                              res.type === 'success' ? '#b7eb8f'
+                            : res.type === 'error'   ? '#ffccc7'
+                            : '#91caff'}`,
+                }}>
+                  {res.msg}
+                </div>
+              )}
+
+              {/* ── Action buttons row ── */}
+              <div style={s.actions}>
+                {/* Edit / Set URL */}
+                {!isEditing && (
+                  <button style={s.btnGhost} onClick={() => setEditingId(rt.id)} disabled={busy}>
+                    ✏️ {hasFeed(rt) ? 'Edit URL' : 'Set URL'}
+                  </button>
                 )}
 
-                {/* Refresh Button */}
+                {/* Refresh from URL */}
                 <button
-                  style={isRefreshing ? s.refreshingBtn : hasFeed ? s.refreshBtn : s.refreshDisabledBtn}
-                  onClick={() => handleRefresh(retailer)}
-                  disabled={isRefreshing}>
-                  {isRefreshing
-                    ? <span style={s.spinner}>⟳</span>
-                    : '🔄'} {isRefreshing ? ' Refreshing...' : ' Refresh Feed Now'}
+                  style={{ ...s.btnPrimary, opacity: hasFeed(rt) ? 1 : 0.5 }}
+                  onClick={() => refreshFeed(rt)}
+                  disabled={busy || !hasFeed(rt)}
+                  title={hasFeed(rt) ? 'Fetch products from feed URL' : 'Set a feed URL first'}
+                >
+                  {isRefresh ? '⏳ Refreshing...' : '🔄 Refresh Feed'}
                 </button>
+
+                {/* ── NEW: Upload XML file directly ── */}
+                <button
+                  style={s.btnUpload}
+                  onClick={() => fileRefs.current[rt.id]?.click()}
+                  disabled={busy}
+                  title="Upload XML file directly for this retailer"
+                >
+                  {isUpload ? '⏳ Uploading...' : '📁 Upload XML'}
+                </button>
+
+                {/* hidden file input */}
+                <input
+                  type="file"
+                  accept=".xml"
+                  style={{ display: 'none' }}
+                  ref={el => fileRefs.current[rt.id] = el}
+                  onChange={e => handleFileSelect(rt, e.target.files[0])}
+                />
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
+// ── Styles ─────────────────────────────────────────────────────────
 const getStyles = (dark) => ({
-  container: { padding: '24px' },
-  heading: { color: dark ? '#fff' : '#333', margin: '0 0 8px' },
-  sub: { color: dark ? '#aaa' : '#888', fontSize: '14px', marginBottom: '24px' },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' },
-  stat: { background: dark ? '#1f1f1f' : 'white', padding: '20px', borderRadius: '10px', textAlign: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.08)' },
-  statNum: { color: dark ? '#fff' : '#333', margin: '0 0 8px', fontSize: '28px' },
-  statLabel: { color: dark ? '#aaa' : '#888', margin: 0, fontSize: '13px' },
-  infoBanner: { background: dark ? '#1a2a1a' : '#f6ffed', border: `1px solid ${dark ? '#2a4a2a' : '#b7eb8f'}`, borderRadius: '10px', padding: '16px', marginBottom: '24px', display: 'flex', gap: '12px', alignItems: 'flex-start' },
-  infoText: { color: dark ? '#aaa' : '#555', fontSize: '14px', lineHeight: '1.6' },
-  loadingBox: { textAlign: 'center', padding: '60px', color: dark ? '#aaa' : '#888' },
-  cards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '20px' },
-  card: { background: dark ? '#1f1f1f' : 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', border: `1px solid ${dark ? '#333' : '#f0f0f0'}` },
-  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' },
-  retailerInfo: { display: 'flex', gap: '12px', alignItems: 'flex-start' },
-  retailerIcon: { fontSize: '28px' },
-  retailerName: { color: dark ? '#fff' : '#333', margin: '0 0 4px', fontSize: '16px' },
-  website: { color: '#1890ff', fontSize: '12px', textDecoration: 'none' },
-  activeBadge: { background: '#f6ffed', color: '#52c41a', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '500', whiteSpace: 'nowrap' },
-  noBadge: { background: '#fffbe6', color: '#faad14', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '500', whiteSpace: 'nowrap' },
-  lastFetched: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px', padding: '8px 12px', background: dark ? '#2a2a2a' : '#f9f9f9', borderRadius: '8px' },
-  lastFetchedLabel: { color: dark ? '#aaa' : '#888', fontSize: '13px' },
-  lastFetchedVal: { color: dark ? '#fff' : '#333', fontSize: '13px', fontWeight: '500' },
-  urlRow: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' },
-  urlInput: { flex: 1, padding: '10px 12px', borderRadius: '8px', border: `1px solid #1890ff`, fontSize: '13px', background: dark ? '#2a2a2a' : 'white', color: dark ? '#fff' : '#333', outline: 'none' },
-  urlDisplay: { flex: 1, padding: '10px 12px', borderRadius: '8px', border: `1px solid ${dark ? '#333' : '#f0f0f0'}`, background: dark ? '#2a2a2a' : '#f9f9f9', overflow: 'hidden' },
-  urlText: { color: '#1890ff', fontSize: '12px', wordBreak: 'break-all' },
-  urlEmpty: { color: dark ? '#555' : '#bbb', fontSize: '13px', fontStyle: 'italic' },
-  editBtn: { padding: '8px 14px', background: dark ? '#2a2a2a' : '#f0f2f5', color: dark ? '#fff' : '#333', border: `1px solid ${dark ? '#444' : '#ddd'}`, borderRadius: '8px', cursor: 'pointer', fontSize: '13px', whiteSpace: 'nowrap' },
-  saveBtn: { padding: '8px 14px', background: '#52c41a', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', whiteSpace: 'nowrap' },
-  cancelBtn: { padding: '8px 12px', background: dark ? '#333' : '#f0f0f0', color: dark ? '#fff' : '#333', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' },
-  successMsg: { background: '#f6ffed', border: '1px solid #b7eb8f', color: '#52c41a', padding: '10px 14px', borderRadius: '8px', marginBottom: '12px', fontSize: '13px' },
-  errorMsg: { background: '#fff2f0', border: '1px solid #ffccc7', color: '#ff4d4f', padding: '10px 14px', borderRadius: '8px', marginBottom: '12px', fontSize: '13px' },
-  loadingMsg: { background: dark ? '#1a1a2e' : '#e6f7ff', border: '1px solid #91d5ff', color: '#1890ff', padding: '10px 14px', borderRadius: '8px', marginBottom: '12px', fontSize: '13px' },
-  refreshBtn: { width: '100%', padding: '12px', background: 'linear-gradient(135deg, #1890ff, #096dd9)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '600' },
-  refreshingBtn: { width: '100%', padding: '12px', background: '#faad14', color: 'white', border: 'none', borderRadius: '8px', cursor: 'not-allowed', fontSize: '14px', fontWeight: '600' },
-  refreshDisabledBtn: { width: '100%', padding: '12px', background: dark ? '#333' : '#f0f0f0', color: dark ? '#555' : '#bbb', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '600' },
-  spinner: { display: 'inline-block', animation: 'spin 1s linear infinite' },
+  page: {
+    padding: 24,
+    background: dark ? '#141414' : '#f5f5f5',
+    minHeight: '100vh',
+  },
+  heading: {
+    color: dark ? '#fff' : '#1f2937',
+    margin: '0 0 8px',
+    fontSize: 22,
+    fontWeight: 700,
+  },
+  sub: {
+    color: dark ? '#9ca3af' : '#6b7280',
+    fontSize: 14,
+    marginBottom: 24,
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+    gap: 20,
+  },
+  card: {
+    background: dark ? '#1f1f1f' : '#fff',
+    borderRadius: 12,
+    padding: 20,
+    boxShadow: dark ? '0 2px 12px rgba(0,0,0,0.4)' : '0 2px 12px rgba(0,0,0,0.08)',
+    border: `1px solid ${dark ? '#303030' : '#e5e7eb'}`,
+  },
+  cardHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
+  },
+  storeName: {
+    fontSize: 28,
+  },
+  retailerName: {
+    fontWeight: 700,
+    fontSize: 16,
+    color: dark ? '#fff' : '#1f2937',
+    marginBottom: 2,
+  },
+  website: {
+    fontSize: 12,
+    color: '#1890ff',
+    textDecoration: 'none',
+  },
+  statusRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  badge: {
+    padding: '2px 10px',
+    borderRadius: 20,
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  lastFetched: {
+    fontSize: 12,
+    color: dark ? '#6b7280' : '#9ca3af',
+  },
+  feedUrlBox: {
+    background: dark ? '#141414' : '#f9fafb',
+    border: `1px solid ${dark ? '#303030' : '#e5e7eb'}`,
+    borderRadius: 8,
+    padding: '8px 12px',
+    marginBottom: 12,
+    wordBreak: 'break-all',
+  },
+  feedUrlLabel: {
+    fontSize: 11,
+    color: dark ? '#6b7280' : '#9ca3af',
+    display: 'block',
+    marginBottom: 2,
+  },
+  feedUrlText: {
+    fontSize: 12,
+    color: '#1890ff',
+  },
+  noFeedMsg: {
+    fontSize: 13,
+    color: dark ? '#6b7280' : '#9ca3af',
+    fontStyle: 'italic',
+    marginBottom: 12,
+  },
+  input: {
+    width: '100%',
+    padding: '9px 12px',
+    border: `1px solid ${dark ? '#444' : '#d1d5db'}`,
+    borderRadius: 8,
+    background: dark ? '#141414' : '#fff',
+    color: dark ? '#fff' : '#1f2937',
+    fontSize: 13,
+    boxSizing: 'border-box',
+    outline: 'none',
+  },
+  actions: {
+    display: 'flex',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  btnPrimary: {
+    padding: '8px 16px',
+    background: '#1890ff',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+  },
+  btnGhost: {
+    padding: '8px 16px',
+    background: 'transparent',
+    color: dark ? '#9ca3af' : '#6b7280',
+    border: `1px solid ${dark ? '#444' : '#d1d5db'}`,
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontSize: 13,
+    whiteSpace: 'nowrap',
+  },
+  btnUpload: {
+    padding: '8px 16px',
+    background: dark ? '#162312' : '#f6ffed',
+    color: '#52c41a',
+    border: '1px solid #b7eb8f',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+  },
+  resultMsg: {
+    fontSize: 13,
+    padding: '8px 12px',
+    borderRadius: 8,
+    marginBottom: 12,
+    fontWeight: 500,
+  },
+  loadBox: {
+    padding: 40,
+    textAlign: 'center',
+    color: dark ? '#6b7280' : '#9ca3af',
+    fontSize: 15,
+  },
+  errorBox: {
+    background: '#fff2f0',
+    border: '1px solid #ffccc7',
+    color: '#cf1322',
+    padding: '12px 16px',
+    borderRadius: 8,
+    marginBottom: 16,
+    fontSize: 14,
+  },
 });
