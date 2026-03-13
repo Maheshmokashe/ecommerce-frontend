@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { djangoApi } from './api';
 
 // ─── API calls ────────────────────────────────────────────
@@ -6,6 +6,7 @@ const getQAReport         = (r) => djangoApi.get('/qa/data-quality/',       { pa
 const getFixSuggestions   = (r) => djangoApi.get('/qa/fix-suggestions/',    { params: r ? { retailer: r } : {} });
 const getAdvancedRules    = (r) => djangoApi.get('/qa/advanced-rules/',     { params: r ? { retailer: r } : {} });
 const getRetailerComp     = ()  => djangoApi.get('/qa/retailer-comparison/');
+const getRetailersList    = ()  => djangoApi.get('/retailers/');
 const getUploadFlags      = ()  => djangoApi.get('/qa/upload-flags/');
 const validateFeed        = (file) => {
   const form = new FormData();
@@ -153,16 +154,23 @@ const SuggestionCard = ({ item, dark }) => {
 };
 
 // ─── Filter Bar — defined OUTSIDE main component to prevent re-render focus loss ──
-const FilterBar = ({ retailer, setRetailer, onRun, btnLabel, loading: isLoading, dark }) => {
+const FilterBar = ({ retailer, setRetailer, onRun, btnLabel, loading: isLoading, dark, retailers }) => {
   const s = getStyles(dark);
   return (
     <div style={s.card}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
           <label style={s.label}>Filter by Retailer (optional)</label>
-          <input style={s.input} placeholder="e.g. Westside IN — leave blank for all"
-            value={retailer} onChange={e => setRetailer(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && onRun()} />
+          <select
+            style={{ ...s.input, cursor: 'pointer', minWidth: 260 }}
+            value={retailer}
+            onChange={e => setRetailer(e.target.value)}
+          >
+            <option value="">— All Retailers —</option>
+            {retailers.map(r => (
+              <option key={r.id} value={r.name}>{r.name}</option>
+            ))}
+          </select>
         </div>
         <button style={{ ...s.btn, marginTop: 22 }} onClick={onRun} disabled={isLoading}>
           {isLoading ? '⏳ Loading...' : btnLabel}
@@ -192,6 +200,12 @@ export default function QADashboard({ darkMode }) {
 
   const setLoad = (key, val) => setLoading(p => ({ ...p, [key]: val }));
   const setErr  = (key, val) => setErrors(p => ({ ...p, [key]: val }));
+
+  // Retailers list for dropdown
+  const [retailers, setRetailers] = useState([]);
+  useEffect(() => {
+    getRetailersList().then(r => setRetailers(r.data || [])).catch(() => {});
+  }, []);
 
   const [file,     setFile]     = useState(null);
   const [dragOver, setDragOver] = useState(false);
@@ -275,7 +289,7 @@ export default function QADashboard({ darkMode }) {
       ══════════════════════════════════════ */}
       {activeTab === 'quality' && (
         <div>
-          <FilterBar retailer={retailer} setRetailer={setRetailer} onRun={fetchReport} btnLabel="🔍 Run Quality Check" loading={loading.report} dark={darkMode} />
+          <FilterBar retailer={retailer} setRetailer={setRetailer} onRun={fetchReport} btnLabel="🔍 Run Quality Check" loading={loading.report} dark={darkMode} retailers={retailers} />
           {errors.report && <div style={s.errorBox}>❌ {errors.report}</div>}
           {report && (
             <>
@@ -341,7 +355,7 @@ export default function QADashboard({ darkMode }) {
       ══════════════════════════════════════ */}
       {activeTab === 'fixes' && (
         <div>
-          <FilterBar retailer={retailer} setRetailer={setRetailer} onRun={fetchSuggestions} btnLabel="💡 Get Fix Suggestions" loading={loading.suggestions} dark={darkMode} />
+          <FilterBar retailer={retailer} setRetailer={setRetailer} onRun={fetchSuggestions} btnLabel="💡 Get Fix Suggestions" loading={loading.suggestions} dark={darkMode} retailers={retailers} />
           {errors.suggestions && <div style={s.errorBox}>❌ {errors.suggestions}</div>}
           {suggestions && (
             <>
@@ -385,7 +399,7 @@ export default function QADashboard({ darkMode }) {
       ══════════════════════════════════════ */}
       {activeTab === 'advanced' && (
         <div>
-          <FilterBar retailer={retailer} setRetailer={setRetailer} onRun={fetchAdvanced} btnLabel="🔬 Run Advanced Rules" loading={loading.advanced} dark={darkMode} />
+          <FilterBar retailer={retailer} setRetailer={setRetailer} onRun={fetchAdvanced} btnLabel="🔬 Run Advanced Rules" loading={loading.advanced} dark={darkMode} retailers={retailers} />
           {errors.advanced && <div style={s.errorBox}>❌ {errors.advanced}</div>}
           {loading.advanced && <div style={s.loadingBox}>⏳ Running checks — image reachability may take a few seconds...</div>}
           {advanced && (
